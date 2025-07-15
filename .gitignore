@@ -24,6 +24,11 @@ coverage/
 .env.test.local
 .env.production.local
 
+
+.env.development
+.env.production
+.env.staging
+
 # Logs
 logs
 *.log
@@ -193,12 +198,7 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?# Environment files
-.env*
-frontend/.env*
-backend/.env*
-
-# Environment files - NEVER commit these
-.env*
-frontend/.env*
-backend/.env*
+*.sw?
+# Build files
+.dart_tool/
+build/
