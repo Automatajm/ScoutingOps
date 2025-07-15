@@ -197,3 +197,8 @@ Thumbs.db
 .env*
 frontend/.env*
 backend/.env*
+
+# Environment files - NEVER commit these
+.env*
+frontend/.env*
+backend/.env*
