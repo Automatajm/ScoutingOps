@@ -1,0 +1,63 @@
+name: "CodeQL Analysis"
+
+on:
+  push:
+    branches: [ "starting_on_git", "main", "master" ]
+  pull_request:
+    branches: [ "starting_on_git", "main", "master" ]
+  schedule:
+    - cron: '0 12 * * 0'  # Weekly on Sundays at 12:00 PM
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'dart' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter/Dart
+      if: matrix.language == 'dart'
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+
+    - name: Setup Node.js
+      if: matrix.language == 'javascript'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+
+    - name: Install Dependencies (Flutter)
+      if: matrix.language == 'dart'
+      run: |
+        cd frontend
+        flutter pub get
+
+    - name: Install Dependencies (Node.js)
+      if: matrix.language == 'javascript'
+      run: |
+        cd backend
+        npm install
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
