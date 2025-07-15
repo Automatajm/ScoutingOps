@@ -193,4 +193,7 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+*.sw?# Environment files
+.env*
+frontend/.env*
+backend/.env*
