@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!-- ===== META TAGS BÁSICOS ===== -->
+  <base href="/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Aplicación para control de plagas en cultivos - Costa Analytics">
+
+  <!-- ===== FLAVOR CONFIG ===== -->
+  <meta name="dart-flavor" content="production">
+  
+  <!-- ===== PWA Y APLICACIÓN MÓVIL ===== -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pest Control">
+  
+  <!-- ===== THEME COLORS ===== -->
+  <meta name="theme-color" content="#0175C2">
+  <meta name="msapplication-navbutton-color" content="#0175C2">
+
+  <!-- ===== PERMISOS ESPECÍFICOS ===== -->
+  <meta http-equiv="permissions-policy" content="camera=*, microphone=*">
+  <meta name="camera-api" content="camera">
+
+  <!-- ===== ICONOS ===== -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png" />
+  
+  <!-- ===== TÍTULO Y MANIFEST ===== -->
+  <title>Pest Control App - Costa Analytics</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- ===== PRECONNECT PARA PERFORMANCE ===== -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="//fonts.googleapis.com">
+
+  <!-- ===== ESTILOS INCLUIDOS ===== -->
+  <style>
+    /* ===== RESET Y BASE ===== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0175C2 0%, #0156A3 100%);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ===== PWA INSTALL BUTTON ===== */
+    .pwa-install-btn {
+      position: fixed;
+      bottom: 80px;
+      right: 15px;
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #0175C2 0%, #0156A3 100%);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 1000;
+      box-shadow: 0 4px 15px rgba(1, 117, 194, 0.4);
+      transition: all 0.3s ease;
+      opacity: 0.9;
+      backdrop-filter: blur(10px);
+    }
+
+    .pwa-install-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 20px rgba(1, 117, 194, 0.6);
+    }
+
+    /* ===== LOADING SPINNER ===== */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(1, 117, 194, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30000;
+      backdrop-filter: blur(10px);
+    }
+
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    .loading-text {
+      color: white;
+      font-size: 16px;
+      font-weight: 500;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .loading-subtext {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ===== MODAL OVERLAY ===== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 20000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(5px);
+    }
+
+    .scanner-button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-success {
+      background: rgba(76, 175, 80, 0.9);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: rgba(102, 102, 102, 0.9);
+      color: white;
+    }
+
+    @media (max-width: 768px) {
+      .scanner-button {
+        padding: 10px 16px;
+        font-size: 12px;
+      }
+    }
+  </style>
+
+  <!-- ===== OVERRIDE GLOBAL DE CONSOLE INTELIGENTE ===== -->
+  <script>
+    (function() {
+      'use strict';
+      
+      // ===== DETECCIÓN DE ENTORNO =====
+      const isProduction = (
+        (window.location.hostname !== 'localhost' && 
+         window.location.hostname !== '127.0.0.1' &&
+         !window.location.hostname.includes('192.168') &&
+         !window.location.hostname.includes('10.0.0') &&
+         window.location.protocol === 'https:') ||
+        (document.querySelector('meta[name="dart-flavor"]')?.content === 'production')
+      );
+      
+      const isStaging = window.location.hostname.includes('staging') ||
+                       window.location.hostname.includes('test') ||
+                       (document.querySelector('meta[name="dart-flavor"]')?.content === 'staging');
+      
+      const isDevelopment = !isProduction && !isStaging;
+      
+      // Guardar consoles originales
+      const originalConsole = {
+        log: console.log,
+        info: console.info,
+        warn: console.warn,
+        error: console.error,
+        debug: console.debug,
+        trace: console.trace,
+        group: console.group,
+        groupCollapsed: console.groupCollapsed,
+        groupEnd: console.groupEnd
+      };
+      
+      // Función para generar referencia
+      const generateRef = () => `REF-${Date.now()}`;
+      
+      // Función para limpiar datos sensibles
+      const sanitizeMessage = (message) => {
+        if (typeof message !== 'string') return '[SANITIZED]';
+        
+        return message
+          .replace(/usuario[:\s]+[\w\-]+/gi, 'usuario: [HIDDEN]')
+          .replace(/password[:\s]+[\w\-]+/gi, 'password: [HIDDEN]')
+          .replace(/token[:\s]+[\w\.\-]+/gi, 'token: [HIDDEN]')
+          .replace(/lote[:\s]+[\w\-]+/gi, 'lote: [HIDDEN]')
+          .replace(/codigo[:\s]+[\w\-]+/gi, 'codigo: [HIDDEN]')
+          .replace(/\b\d{6,12}\b/g, '[CODE]')
+          .replace(/ip[:\s]+[\d\.]+/gi, 'ip: [HIDDEN]');
+      };
+      
+      if (isProduction) {
+        // 🚫 PRODUCCIÓN: Silencio total excepto errores críticos
+        console.log = function() {};
+        console.info = function() {};
+        console.debug = function() {};
+        console.trace = function() {};
+        console.group = function() {};
+        console.groupCollapsed = function() {};
+        console.groupEnd = function() {};
+        
+        console.warn = function(message, ...args) {
+          // Solo warnings críticos con referencia
+          const ref = generateRef();
+          originalConsole.warn(`⚠️ WARNING: ${ref}`);
+        };
+        
+        console.error = function(message, ...args) {
+          const ref = generateRef();
+          const messageStr = String(message || '');
+          
+          // Detectar errores de framework vs errores de app
+          const isFrameworkError = messageStr.includes('Flutter') || 
+                                  messageStr.includes('dart:') ||
+                                  messageStr.includes('framework') ||
+                                  messageStr.includes('rendering') ||
+                                  messageStr.includes('DioException') ||
+                                  messageStr.includes('RenderFlex');
+          
+          const isSecurityError = messageStr.toLowerCase().includes('security') ||
+                                 messageStr.toLowerCase().includes('unauthorized') ||
+                                 messageStr.toLowerCase().includes('forbidden');
+          
+          if (isFrameworkError) {
+            // Errores de framework: mostrar pero limpiar datos sensibles
+            const cleanMessage = sanitizeMessage(messageStr);
+            originalConsole.error(`❌ FRAMEWORK: ${cleanMessage}`);
+          } else if (isSecurityError) {
+            // Errores de seguridad: solo referencia
+            originalConsole.error(`🔒 SECURITY: ${ref}`);
+          } else {
+            // Errores de app: solo referencia
+            originalConsole.error(`❌ APP ERROR: ${ref}`);
+          }
+        };
+        
+      } else if (isStaging) {
+        // ⚠️ STAGING: Nivel intermedio
+        console.log = function() {}; // Silencio logs normales
+        console.debug = function() {}; // Silencio debug
+        
+        console.info = function(message, ...args) {
+          const cleanMessage = sanitizeMessage(String(message || ''));
+          originalConsole.info(`ℹ️ [STAGING]`, cleanMessage, ...args);
+        };
+        
+        console.warn = function(message, ...args) {
+          originalConsole.warn(`⚠️ [STAGING]`, message, ...args);
+        };
+        
+        console.error = function(message, ...args) {
+          originalConsole.error(`❌ [STAGING]`, message, ...args);
+        };
+        
+      } else {
+        // 🐛 DEVELOPMENT: Logs normales con prefijos ambientales
+        const env = window.location.hostname === 'localhost' ? 'LOCAL' : 
+                   window.location.hostname.includes('192.168') ? 'LAN' : 
+                   window.location.hostname.includes('10.0.0') ? 'WIFI' :
+                   window.location.hostname.includes('ngrok') ? 'NGROK' : 'DEV';
+        
+        console.log = function(message, ...args) {
+          originalConsole.log(`🐛 [${env}]`, message, ...args);
+        };
+        
+        console.info = function(message, ...args) {
+          originalConsole.info(`ℹ️ [${env}]`, message, ...args);
+        };
+        
+        console.warn = function(message, ...args) {
+          originalConsole.warn(`⚠️ [${env}]`, message, ...args);
+        };
+        
+        console.error = function(message, ...args) {
+          originalConsole.error(`❌ [${env}]`, message, ...args);
+        };
+        
+        console.debug = function(message, ...args) {
+          originalConsole.debug(`🔍 [${env}]`, message, ...args);
+        };
+      }
+      
+      // ===== LOGGER GLOBAL PARA CASOS CRÍTICOS =====
+      window.Logger = {
+        critical: function(message, data = null) {
+          const ref = generateRef();
+          if (isProduction) {
+            originalConsole.error(`🚨 CRITICAL: ${ref}`);
+          } else {
+            originalConsole.error(`🚨 CRITICAL: ${message} [${ref}]`, data);
+          }
+        },
+        
+        security: function(message, data = null) {
+          const ref = generateRef();
+          if (isProduction) {
+            originalConsole.error(`🔒 SECURITY: ${ref}`);
+          } else {
+            originalConsole.error(`🔒 SECURITY: ${message} [${ref}]`, data);
+          }
+        },
+        
+        performance: function(message, data = null) {
+          if (!isProduction) {
+            originalConsole.warn(`⚡ PERFORMANCE: ${message}`, data);
+          }
+        },
+
+        network: function(message, data = null) {
+          if (isDevelopment) {
+            originalConsole.info(`🌐 NETWORK: ${message}`, data);
+          }
+        },
+
+        scanner: function(message, data = null) {
+          if (isDevelopment) {
+            originalConsole.info(`📷 SCANNER: ${message}`, data);
+          }
+        }
+      };
+      
+      // Info de inicialización
+      if (!isProduction) {
+        const envInfo = {
+          environment: isProduction ? 'PRODUCTION' : isStaging ? 'STAGING' : 'DEVELOPMENT',
+          hostname: window.location.hostname,
+          protocol: window.location.protocol,
+          isSecure: window.location.protocol === 'https:',
+          flavorMeta: document.querySelector('meta[name="dart-flavor"]')?.content || 'none'
+        };
+        
+        originalConsole.log(`🚀 Console Override activo`, envInfo);
+      }
+      
+    })();
+  </script>
+</head>
+
+<body>
+  <!-- ===== LOADING INICIAL ===== -->
+  <div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Cargando Pest Control</div>
+    <div class="loading-subtext">Inicializando sistema...</div>
+  </div>
+
+  <!-- ===== CARGAR BIBLIOTECAS EXTERNAS PRIMERO ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
+  
+  <!-- ===== SCRIPT PRINCIPAL ===== -->
+  <script>
+    console.log('🚀 === INICIANDO PEST CONTROL ===');
+    
+    // ===== VARIABLES GLOBALES =====
+    let deferredPrompt;
+    let installButton = null;
+    let barcodeScanner = {
+      isActive: false,
+      videoStream: null,
+      overlay: null,
+      callback: null,
+      worker: null,
+      isProcessing: false,
+      capturedImage: null
+    };
+
+    // ===== UTILIDADES =====
+    function isMobileDevice() {
+      return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        || (window.innerWidth <= 768 && 'ontouchstart' in window);
+    }
+
+    function isPWAInstalled() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+    }
+
+    // ===== PWA INSTALL LOGIC =====
+    window.addEventListener('beforeinstallprompt', (e) => {
+      if (!isMobileDevice() || isPWAInstalled()) return;
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallButton();
+    });
+
+    function showInstallButton() {
+      if (!isMobileDevice() || isPWAInstalled() || installButton) return;
+
+      installButton = document.createElement('button');
+      installButton.innerHTML = '📱';
+      installButton.title = 'Instalar App';
+      installButton.className = 'pwa-install-btn';
+
+      installButton.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          Logger.network('PWA install outcome', outcome);
+          deferredPrompt = null;
+          hideInstallButton();
+        }
+      });
+
+      document.body.appendChild(installButton);
+      setTimeout(() => {
+        if (installButton && !isPWAInstalled()) hideInstallButton();
+      }, 30000);
+    }
+
+    function hideInstallButton() {
+      if (installButton && installButton.parentNode) {
+        installButton.style.opacity = '0';
+        setTimeout(() => {
+          if (installButton && installButton.parentNode) {
+            document.body.removeChild(installButton);
+          }
+          installButton = null;
+        }, 300);
+      }
+    }
+
+    // ===== CONNECTIVITY STATUS =====
+    function updateOnlineStatus() {
+      window.flutterConnectivityStatus = navigator.onLine ? "online" : "offline";
+      Logger.network('Connection status', window.flutterConnectivityStatus);
+      
+      if (window.flutter_connectivity_update) {
+        window.flutter_connectivity_update(window.flutterConnectivityStatus);
+      }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    // ===== BARCODE SCANNER FUNCTIONS =====
+    
+    window.setBarcodeCallback = function(callback) {
+      Logger.scanner('Flutter callback registrado');
+      barcodeScanner.callback = callback;
+    };
+
+    window.startWebBarcodeScanner = function() {
+      Logger.scanner('Iniciando escáner OCR...');
+      
+      if (barcodeScanner.isActive) {
+        Logger.scanner('Escáner ya activo, cerrando anterior...');
+        cleanupBarcodeScanner();
+      }
+
+      createScannerUI();
+      startCamera();
+    };
+
+    function createScannerUI() {
+      barcodeScanner.overlay = document.createElement('div');
+      barcodeScanner.overlay.className = 'modal-overlay';
+      
+      barcodeScanner.overlay.innerHTML = `
+        <div style="
+          background: white;
+          border-radius: 16px;
+          padding: 20px;
+          max-width: 500px;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+          margin: auto;
+        ">
+          <!-- Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: #333; font-size: 18px;">📷 Escáner de Códigos</h3>
+            <button onclick="cleanupBarcodeScanner()" style="
+              background: #f44336;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 32px;
+              height: 32px;
+              cursor: pointer;
+              font-size: 16px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">✕</button>
+          </div>
+          
+          <!-- Video container -->
+          <div style="position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;">
+            <video id="scannerVideo" style="width: 100%; height: 300px; object-fit: cover; border-radius: 12px;"></video>
+            
+            <!-- Guía de escaneo -->
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                        width: 80%; height: 100px; border: 3px solid #4CAF50; border-radius: 8px;
+                        display: flex; align-items: center; justify-content: center;">
+              <span style="background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+                Posicione la etiqueta aquí
+              </span>
+            </div>
+            
+            <!-- Estado -->
+            <div id="scannerStatus" style="position: absolute; top: 10px; left: 10px; right: 10px;
+                                          background: rgba(0,0,0,0.8); color: white; padding: 8px 12px; 
+                                          border-radius: 15px; text-align: center; font-size: 14px;">
+              🔍 Iniciando cámara...
+            </div>
+            
+            <!-- Flash para indicar captura -->
+            <div id="captureFlash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                                         background: white; opacity: 0; pointer-events: none;
+                                         border-radius: 12px; transition: opacity 0.1s;"></div>
+          </div>
+          
+          <!-- Controles -->
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;">
+            <button onclick="captureAndProcess()" id="captureBtn" class="scanner-button btn-success">
+              📸 Capturar y Leer
+            </button>
+            <button onclick="showManualEntry()" class="scanner-button btn-secondary">
+              ⌨️ Entrada Manual
+            </button>
+            <button onclick="cleanupBarcodeScanner()" class="scanner-button btn-secondary">
+              ❌ Cancelar
+            </button>
+          </div>
+          
+          <!-- Resultado detectado -->
+          <div id="detectedResult" style="margin-bottom: 15px; text-align: center;"></div>
+          
+          <!-- Info -->
+          <div style="padding: 15px; background: #e3f2fd; border-radius: 12px; text-align: center;">
+            <small style="color: #1976d2; line-height: 1.4;">
+              💡 <strong>Paso 1:</strong> Posicione la etiqueta en el marco verde<br>
+              📸 <strong>Paso 2:</strong> Presione "Capturar y Leer"<br>
+              🎯 <strong>Paso 3:</strong> El sistema procesará automáticamente
+            </small>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(barcodeScanner.overlay);
+      barcodeScanner.isActive = true;
+    }
+
+    async function startCamera() {
+      try {
+        updateStatus('📷 Solicitando acceso a cámara...');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        barcodeScanner.videoStream = stream;
+        const video = document.getElementById('scannerVideo');
+        
+        if (video) {
+          video.srcObject = stream;
+          await video.play();
+          updateStatus('✅ Cámara lista - Presione "Capturar y Leer"');
+          Logger.scanner('Cámara iniciada correctamente');
+        }
+        
+      } catch (error) {
+        Logger.critical('Error acceso cámara', error.message);
+        updateStatus('❌ Error: No se pudo acceder a la cámara');
+        setTimeout(() => {
+          showManualEntry();
+        }, 2000);
+      }
+    }
+
+    async function captureAndProcess() {
+      if (barcodeScanner.isProcessing) {
+        return;
+      }
+      
+      const video = document.getElementById('scannerVideo');
+      if (!video || video.videoWidth === 0) {
+        updateStatus('❌ Cámara no disponible');
+        return;
+      }
+      
+      const captureBtn = document.getElementById('captureBtn');
+      if (captureBtn) {
+        captureBtn.disabled = true;
+        captureBtn.textContent = '⏳ Procesando...';
+      }
+      
+      barcodeScanner.isProcessing = true;
+      
+      try {
+        updateStatus('📸 Capturando imagen...');
+        
+        // Efecto flash
+        const flash = document.getElementById('captureFlash');
+        if (flash) {
+          flash.style.opacity = '0.8';
+          setTimeout(() => {
+            flash.style.opacity = '0';
+          }, 150);
+        }
+        
+        // Capturar imagen
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        
+        barcodeScanner.capturedImage = canvas;
+        Logger.scanner('Imagen capturada');
+        
+        updateStatus('🤖 Analizando imagen con OCR...');
+        
+        // Procesar con Tesseract
+        const result = await Tesseract.recognize(canvas, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              updateStatus(`🔍 Procesando: ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        });
+        
+        Logger.scanner('Texto OCR detectado', result.data.text);
+        
+        // Extraer número útil
+        const finalNumber = extractUsefulNumber(result.data.text);
+        
+        if (finalNumber) {
+          Logger.scanner('Número útil extraído', finalNumber);
+          showDetectedResult(finalNumber);
+        } else {
+          updateStatus('⚠️ No se detectó un código válido');
+          showRetryOptions();
+        }
+        
+      } catch (error) {
+        Logger.critical('Error en procesamiento OCR', error.message);
+        updateStatus('❌ Error en análisis');
+        showRetryOptions();
+      } finally {
+        if (captureBtn) {
+          captureBtn.disabled = false;
+          captureBtn.textContent = '📸 Capturar y Leer';
+        }
+        barcodeScanner.isProcessing = false;
+      }
+    }
+
+    function extractUsefulNumber(text) {
+      Logger.scanner('Analizando texto', text);
+      
+      const patterns = [
+        /L\s*(\d{9})/gi,
+        /(\d{9})/g,
+        /[^\d](\d{6,12})[^\d]/g,
+        /^(\d{6,12})$/gm,
+      ];
+      
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+          const number = match[1] || match[0];
+          const cleaned = number.replace(/\D/g, '');
+          
+          if (cleaned.length >= 6 && cleaned.length <= 12) {
+            const usefulNumber = cleaned.replace(/^0+/, '') || '0';
+            
+            if (isValidLoteNumber(usefulNumber)) {
+              Logger.scanner('Número procesado', `${cleaned} → ${usefulNumber}`);
+              return usefulNumber;
+            }
+          }
+        }
+      }
+      
+      return null;
+    }
+
+    function isValidLoteNumber(number) {
+      const invalidPatterns = [
+        /^(123|111|000|999)+$/,
+        /^12345/,
+        /^(\d)\1{4,}$/,
+      ];
+      
+      return !invalidPatterns.some(pattern => pattern.test(number)) && number.length >= 3;
+    }
+
+    function showDetectedResult(number) {
+      const container = document.getElementById('detectedResult');
+      if (!container) return;
+      
+      updateStatus('🎯 ¡Código detectado!');
+      
+      container.innerHTML = `
+        <div style="background: #e8f5e8; padding: 20px; border-radius: 12px; border: 2px solid #4caf50;">
+          <div style="margin-bottom: 15px;">
+            <strong style="color: #2e7d32; font-size: 16px;">✅ Código detectado:</strong>
+          </div>
+          
+          <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <div style="font-size: 24px; font-weight: bold; color: #1976d2; text-align: center;">
+              ${number}
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="sendToFlutter('${number}')" class="scanner-button btn-success">
+              ✅ Usar este código
+            </button>
+            <button onclick="retryCapture()" class="scanner-button btn-success">
+              📸 Intentar otra vez
+            </button>
+            <button onclick="showManualEntry()" class="scanner-button btn-secondary">
+              ⌨️ Entrada manual
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function retryCapture() {
+      const container = document.getElementById('detectedResult');
+      if (container) {
+        container.innerHTML = '';
+      }
+      updateStatus('✅ Cámara lista - Presione "Capturar y Leer"');
+    }
+
+    function sendToFlutter(code) {
+      Logger.scanner('Enviando código', code);
+      
+      if (barcodeScanner.callback) {
+        try {
+          barcodeScanner.callback(code);
+          Logger.scanner('Código enviado exitosamente');
+          updateStatus('✅ Código enviado');
+          setTimeout(() => {
+            cleanupBarcodeScanner();
+          }, 1000);
+        } catch (error) {
+          Logger.critical('Error enviando código', error.message);
+          updateStatus('❌ Error enviando código');
+        }
+      } else {
+        Logger.critical('No hay callback de Flutter registrado');
+        updateStatus('❌ Error: No hay conexión con Flutter');
+      }
+    }
+
+    function showManualEntry() {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div style="
+          background: white;
+          border-radius: 16px;
+          padding: 30px;
+          max-width: 400px;
+          width: 100%;
+          text-align: center;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        ">
+          <h3 style="margin-bottom: 20px;">⌨️ Entrada Manual</h3>
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+              Código del lote:
+            </label>
+            <input type="number" 
+                   id="manualCodeInput" 
+                   placeholder="Escriba el código"
+                   style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; 
+                          font-size: 16px; text-align: center;"
+                   autofocus>
+          </div>
+          
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="sendManualCode()" class="scanner-button btn-success">
+              ✅ Enviar
+            </button>
+            <button onclick="closeManualEntry()" class="scanner-button btn-secondary">
+              ❌ Cancelar
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(overlay);
+      
+      document.getElementById('manualCodeInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendManualCode();
+        }
+      });
+    }
+
+    function sendManualCode() {
+      const input = document.getElementById('manualCodeInput');
+      const code = input.value.trim();
+      
+      if (code) {
+        Logger.scanner('Código manual ingresado', code);
+        sendToFlutter(code);
+        closeManualEntry();
+      } else {
+        input.focus();
+        input.style.borderColor = '#f44336';
+        setTimeout(() => {
+          input.style.borderColor = '#ddd';
+        }, 2000);
+      }
+    }
+
+    function closeManualEntry() {
+      const overlays = document.querySelectorAll('.modal-overlay');
+      overlays.forEach(overlay => {
+        if (overlay.querySelector('#manualCodeInput')) {
+          document.body.removeChild(overlay);
+        }
+      });
+    }
+
+    function updateStatus(message) {
+      const status = document.getElementById('scannerStatus');
+      if (status) {
+        status.textContent = message;
+        Logger.scanner('Estado actualizado', message);
+      }
+    }
+
+    window.cleanupBarcodeScanner = function() {
+      Logger.scanner('Limpiando escáner...');
+      
+      barcodeScanner.isActive = false;
+      barcodeScanner.isProcessing = false;
+      barcodeScanner.capturedImage = null;
+      
+      if (barcodeScanner.videoStream) {
+        barcodeScanner.videoStream.getTracks().forEach(track => {
+          track.stop();
+        });
+        barcodeScanner.videoStream = null;
+      }
+      
+      if (barcodeScanner.overlay && barcodeScanner.overlay.parentNode) {
+        document.body.removeChild(barcodeScanner.overlay);
+        barcodeScanner.overlay = null;
+      }
+      
+      closeManualEntry();
+      Logger.scanner('Escáner limpiado');
+    };
+
+    // ===== NETWORK BRIDGE CORREGIDO PARA MIXED CONTENT ===== 
+    window.pestControlNetworkBridge = {
+      detectedConfig: null,
+      isDetecting: false,
+      
+      async detectLocalIPs() {
+        return new Promise((resolve) => {
+          const ips = [];
+          const rtc = new RTCPeerConnection({ iceServers: [] });
+          
+          rtc.createDataChannel('');
+          rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
+          
+          rtc.onicecandidate = (event) => {
+            if (event.candidate) {
+              const candidate = event.candidate.candidate;
+              const match = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+              if (match && !ips.includes(match[1]) && !match[1].startsWith('127.')) {
+                ips.push(match[1]);
+              }
+            }
+          };
+          
+          setTimeout(() => {
+            rtc.close();
+            resolve(ips);
+          }, 2000);
+        });
+      },
+
+      async testConnection(url) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const response = await fetch(`${url}/api/health`, {
+            method: 'GET',
+            signal: controller.signal,
+            headers: { 
+              'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const data = await response.json();
+            return { success: true, url, data };
+          }
+          return { success: false, url, error: 'Invalid response' };
+        } catch (error) {
+          return { success: false, url, error: error.message };
+        }
+      },
+
+      async detectConfiguration() {
+        if (this.isDetecting) return this.detectedConfig;
+        
+        this.isDetecting = true;
+        Logger.network('Iniciando detección de red...');
+        
+        try {
+          const ips = await this.detectLocalIPs();
+          Logger.network('IPs detectadas', ips);
+          
+          const ports = [8000, 3000, 8080, 5000];
+          
+          // 🔧 ARREGLO MIXED CONTENT: Solo usar HTTPS si la página está en HTTPS
+          const currentProtocol = window.location.protocol;
+          const protocols = currentProtocol === 'https:' ? ['https'] : ['https', 'http'];
+          
+          Logger.network('Protocolo actual', currentProtocol);
+          Logger.network('Protocolos a probar', protocols);
+          
+          const testUrls = [];
+          
+          // URLs con IPs detectadas
+          for (const ip of ips) {
+            for (const port of ports) {
+              for (const protocol of protocols) {
+                testUrls.push(`${protocol}://${ip}:${port}`);
+              }
+            }
+          }
+          
+          // URLs localhost
+          for (const port of ports) {
+            for (const protocol of protocols) {
+              testUrls.push(`${protocol}://localhost:${port}`);
+            }
+          }
+          
+          Logger.network('URLs a probar', testUrls.length);
+          Logger.network('Primeras 5 URLs', testUrls.slice(0, 5));
+          
+          const results = await Promise.allSettled(
+            testUrls.map(url => this.testConnection(url))
+          );
+          
+          const workingConnections = results
+            .filter(result => result.status === 'fulfilled' && result.value.success)
+            .map(result => result.value)
+            .sort((a, b) => {
+              // Priorizar HTTPS
+              if (a.url.startsWith('https') && !b.url.startsWith('https')) return -1;
+              if (!a.url.startsWith('https') && b.url.startsWith('https')) return 1;
+              return 0;
+            });
+          
+          Logger.network('Conexiones exitosas', workingConnections.length);
+          
+          if (workingConnections.length > 0) {
+            const bestConnection = workingConnections[0];
+            const config = {
+              apiUrl: `${bestConnection.url}/api`,
+              baseUrl: bestConnection.url,
+              detectedIP: bestConnection.url.match(/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'localhost',
+              detectionStatus: 'success',
+              availableUrls: workingConnections.map(c => c.url),
+              timestamp: new Date().toISOString(),
+              protocol: bestConnection.url.startsWith('https') ? 'https' : 'http'
+            };
+            
+            this.detectedConfig = config;
+            Logger.network('Configuración detectada', config);
+            localStorage.setItem('pestControlDetectedConfig', JSON.stringify(config));
+            return config;
+          } else {
+            Logger.network('No se encontraron conexiones válidas');
+            return this.getFallbackConfig();
+          }
+        } catch (error) {
+          Logger.critical('Error en detección de red', error.message);
+          return this.getFallbackConfig();
+        } finally {
+          this.isDetecting = false;
+        }
+      },
+
+      getFallbackConfig() {
+        // 🔧 ARREGLO: Usar el mismo protocolo que la página actual
+        const currentProtocol = window.location.protocol;
+        const protocol = currentProtocol === 'https:' ? 'https' : 'https'; // Siempre preferir HTTPS
+        
+        Logger.network('Fallback config usando protocolo', protocol);
+        
+        const config = {
+          apiUrl: `${protocol}://10.0.0.19:8000/api`,
+          baseUrl: `${protocol}://10.0.0.19:8000`,
+          detectedIP: '10.0.0.19',
+          detectionStatus: 'fallback',
+          availableUrls: [
+            `${protocol}://10.0.0.19:8000`, 
+            `${protocol}://localhost:8000`
+          ],
+          timestamp: new Date().toISOString(),
+          protocol: protocol
+        };
+        
+        this.detectedConfig = config;
+        Logger.network('Config fallback creada', config);
+        return config;
+      },
+
+      async getConfiguration() {
+        const saved = localStorage.getItem('pestControlDetectedConfig');
+        if (saved) {
+          try {
+            const config = JSON.parse(saved);
+            
+            // 🔧 VERIFICAR PROTOCOLO: Si la página cambió de HTTP a HTTPS, re-detectar
+            const currentProtocol = window.location.protocol;
+            const configProtocol = config.baseUrl.startsWith('https') ? 'https:' : 'http:';
+            
+            if (currentProtocol === 'https:' && configProtocol === 'http:') {
+              Logger.network('Protocolo cambió a HTTPS, re-detectando...');
+              return await this.detectConfiguration();
+            }
+            
+            const test = await this.testConnection(config.baseUrl);
+            if (test.success) {
+              Logger.network('Usando configuración guardada', config);
+              this.detectedConfig = config;
+              return config;
+            }
+          } catch (error) {
+            Logger.network('Configuración guardada inválida, re-detectando...', error.message);
+          }
+        }
+        
+        return await this.detectConfiguration();
+      },
+
+      async redetect() {
+        localStorage.removeItem('pestControlDetectedConfig');
+        this.detectedConfig = null;
+        return await this.detectConfiguration();
+      }
+    };
+
+    // ===== FUNCIONES DE ERROR =====
+    window.addEventListener('error', function(event) {
+      Logger.critical('Error global', event.error);
+    });
+
+    window.addEventListener('unhandledrejection', function(event) {
+      Logger.critical('Promise rechazada', event.reason);
+    });
+
+    // ===== FUNCIONES DE DEBUG MEJORADAS =====
+    window.testBarcodeScanner = function() {
+      const status = {
+        active: barcodeScanner.isActive,
+        hasStream: !!barcodeScanner.videoStream,
+        hasCallback: !!barcodeScanner.callback,
+        hasTesseract: typeof Tesseract !== 'undefined',
+        hasZXing: typeof ZXing !== 'undefined'
+      };
+      
+      Logger.scanner('Test escáner ejecutado', status);
+      return status;
+    };
+
+    window.showConfig = () => {
+      Logger.network('Configuración actual', window.pestControlConfig);
+      return window.pestControlConfig;
+    };
+
+    window.redetect = async () => {
+      Logger.network('Re-detectando configuración...');
+      const config = await window.pestControlNetworkBridge.redetect();
+      window.pestControlConfig = config;
+      Logger.network('Nueva configuración', config);
+      return config;
+    };
+
+    window.testAPI = async () => {
+      if (!window.pestControlConfig) {
+        Logger.network('No hay configuración disponible');
+        return { error: 'No config available' };
+      }
+      
+      const result = await window.pestControlNetworkBridge.testConnection(
+        window.pestControlConfig.baseUrl
+      );
+      Logger.network('Resultado de prueba API', result);
+      return result;
+    };
+
+    // Nueva función para prueba manual
+    window.testDirectAPI = async () => {
+      const testUrl = 'https://10.0.0.19:8000';
+      Logger.network('Probando conexión directa a', testUrl);
+      
+      try {
+        const response = await fetch(`${testUrl}/api/health`, {
+          method: 'GET',
+          headers: { 
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          Logger.network('✅ Conexión directa exitosa', data);
+          return { success: true, data };
+        } else {
+          Logger.network('❌ Respuesta no OK', response.status);
+          return { success: false, status: response.status };
+        }
+      } catch (error) {
+        Logger.network('❌ Error en conexión directa', error.message);
+        return { success: false, error: error.message };
+      }
+    };
+
+    // ===== INICIALIZACIÓN =====
+    document.addEventListener('DOMContentLoaded', async () => {
+      Logger.network('DOM cargado - Inicializando...');
+      
+      // Actualizar estado de conexión
+      updateOnlineStatus();
+      
+      // Detectar configuración de red
+      const config = await window.pestControlNetworkBridge.getConfiguration();
+      window.pestControlConfig = config;
+      Logger.network('Configuración lista', config);
+      
+      // Verificar disponibilidad del escáner
+      const scannerStatus = {
+        location: window.location.href,
+        userAgent: navigator.userAgent,
+        isMobile: isMobileDevice(),
+        functions: {
+          startWebBarcodeScanner: typeof window.startWebBarcodeScanner,
+          setBarcodeCallback: typeof window.setBarcodeCallback,
+          cleanupBarcodeScanner: typeof window.cleanupBarcodeScanner
+        },
+        libraries: {
+          tesseract: typeof Tesseract,
+          zxing: typeof ZXing
+        }
+      };
+      
+      Logger.scanner('Verificación inicial', scannerStatus);
+      
+      // Auto-test
+      setTimeout(() => {
+        Logger.scanner('Ejecutando auto-test...');
+        window.testBarcodeScanner();
+      }, 1000);
+      
+      // Notificar a Flutter
+      if (window.flutter_network_ready) {
+        window.flutter_network_ready(config);
+      }
+      
+      Logger.network('Inicialización completa');
+    });
+
+    // Ocultar loading cuando Flutter esté listo
+    window.addEventListener('flutter-first-frame', () => {
+      const loading = document.getElementById('loading');
+      if (loading) {
+        loading.style.opacity = '0';
+        setTimeout(() => {
+          loading.style.display = 'none';
+        }, 500);
+      }
+    });
+
+    console.log('✅ === PEST CONTROL SCRIPT CARGADO ===');
+  </script>
+
+  <!-- ===== FLUTTER APP ===== -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>ture()" class="scanner-button btn-secondary">
+              🔄 Capturar otra vez
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function showRetryOptions() {
+      const container = document.getElementById('detectedResult');
+      if (!container) return;
+      
+      container.innerHTML = `
+        <div style="background: #fff3cd; padding: 20px; border-radius: 12px; border: 2px solid #ffc107;">
+          <div style="margin-bottom: 15px;">
+            <strong style="color: #856404;">⚠️ No se detectó código</strong>
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="retryCap

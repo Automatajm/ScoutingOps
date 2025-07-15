@@ -1,0 +1,1175 @@
+import 'package:flutter/material.dart';
+import '../../../models/monitoreo_model.dart';
+import '../utils/constants.dart';
+import '../utils/nivel_calculator.dart';
+import '../widgets/form_fields.dart';
+import '../widgets/responsive_card.dart';
+
+class RegistroTab extends StatefulWidget {
+  final Monitoreo? currentMonitoreo;
+  final bool isEditing;
+  final bool isCreatingNew;
+  final bool isSubmitting;
+  final String errorMessage;
+  final bool isManualEntry;
+
+  // Controladores
+  final TextEditingController codigoLoteController;
+  final TextEditingController casaController;
+  final TextEditingController canteroController;
+  final TextEditingController responsableController;
+  final TextEditingController comentariosController;
+  final TextEditingController cantidadController;
+  final TextEditingController cantidadBotadaController;
+  final TextEditingController muestra1Controller;
+  final TextEditingController muestra2Controller;
+  final TextEditingController muestra3Controller;
+
+  // Valores seleccionados
+  final String? selectedCasa;
+  final String? selectedVariedad;
+  final String? selectedPlaga;
+  final String? selectedNivelMuestra1;
+  final String? selectedNivelMuestra2;
+  final String? selectedNivelMuestra3;
+
+  // Listas para dropdowns
+  final List<String> casas;
+  final List<String> variedades;
+  final List<String> plagas;
+
+  // Límites de niveles
+  final int? limiteNivel1;
+  final int? limiteNivel2;
+  final int? limiteNivel3;
+
+  // Callbacks
+  final Function() onSave;
+  final Function() onSavePartial;
+  final Function() onCancel;
+  final Function() onToggleEntryMode;
+  final Function() onScanBarcode;
+  final Function(String?) onCasaChanged;
+  final Function(String?) onVariedadChanged;
+  final Function(String?) onPlagaChanged;
+  final Function(String?) onNivelMuestra1Changed;
+  final Function(String?) onNivelMuestra2Changed;
+  final Function(String?) onNivelMuestra3Changed;
+  final Function(String) onMuestra1Changed;
+  final Function(String) onMuestra2Changed;
+  final Function(String) onMuestra3Changed;
+
+  // Propiedad para modo offline
+  final bool isOfflineMode;
+
+  // Nueva propiedad para identificar pantallas pequeñas
+  final bool isSmallScreen;
+
+  const RegistroTab({
+    Key? key,
+    this.currentMonitoreo,
+    required this.isEditing,
+    required this.isCreatingNew,
+    required this.isSubmitting,
+    required this.errorMessage,
+    required this.isManualEntry,
+    required this.codigoLoteController,
+    required this.casaController,
+    required this.canteroController,
+    required this.responsableController,
+    required this.comentariosController,
+    required this.cantidadController,
+    required this.cantidadBotadaController,
+    required this.muestra1Controller,
+    required this.muestra2Controller,
+    required this.muestra3Controller,
+    required this.selectedCasa,
+    required this.selectedVariedad,
+    required this.selectedPlaga,
+    required this.selectedNivelMuestra1,
+    required this.selectedNivelMuestra2,
+    required this.selectedNivelMuestra3,
+    required this.casas,
+    required this.variedades,
+    required this.plagas,
+    required this.limiteNivel1,
+    required this.limiteNivel2,
+    required this.limiteNivel3,
+    required this.onSave,
+    required this.onSavePartial,
+    required this.onCancel,
+    required this.onToggleEntryMode,
+    required this.onScanBarcode,
+    required this.onCasaChanged,
+    required this.onVariedadChanged,
+    required this.onPlagaChanged,
+    required this.onNivelMuestra1Changed,
+    required this.onNivelMuestra2Changed,
+    required this.onNivelMuestra3Changed,
+    required this.onMuestra1Changed,
+    required this.onMuestra2Changed,
+    required this.onMuestra3Changed,
+    this.isOfflineMode = false,
+    this.isSmallScreen = false,
+  }) : super(key: key);
+
+  @override
+  State<RegistroTab> createState() => _RegistroTabState();
+}
+
+class _RegistroTabState extends State<RegistroTab> {
+  // Estados para secciones colapsables en móvil
+  bool _isLoteExpanded = true;
+  bool _isMonitoreoExpanded = true;
+  bool _isMuestrasExpanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    // Lista de niveles de muestra manual
+    final List<String> nivelesMuestra = ['1', '2', '3'];
+
+    return Container(
+      color: MonitoreoStyles.lightGrey,
+      padding: EdgeInsets.all(widget.isSmallScreen ? 8 : 16),
+      child: widget.isSmallScreen
+          ? _buildMobileLayout(nivelesMuestra)
+          : _buildDesktopLayout(nivelesMuestra),
+    );
+  }
+
+  // Layout para pantallas de escritorio
+  Widget _buildDesktopLayout(List<String> nivelesMuestra) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: widget.isSubmitting
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Título
+                    Text(
+                      widget.isCreatingNew
+                          ? 'Nuevo Monitoreo'
+                          : 'Editar Monitoreo',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: MonitoreoStyles.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Indicador de modo offline
+                    if (widget.isOfflineMode)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.wifi_off,
+                              color: Colors.red.shade800,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Modo sin conexión: Los cambios se guardarán localmente y se sincronizarán cuando vuelva la conexión.',
+                                style: TextStyle(
+                                  color: Colors.red.shade800,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Mensaje de error si existe
+                    if (widget.errorMessage.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          widget.errorMessage,
+                          style: TextStyle(color: Colors.red.shade800),
+                        ),
+                      ),
+
+                    // Toggle automático/manual
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Modo de entrada:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ToggleButtons(
+                            isSelected: [
+                              !widget.isManualEntry,
+                              widget.isManualEntry
+                            ],
+                            onPressed: (index) {
+                              widget.onToggleEntryMode();
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            children: const [
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('Código de barras'),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('Manual'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sección para información del lote
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Información del lote',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: MonitoreoStyles.primaryColor,
+                            ),
+                          ),
+                          const Divider(height: 24),
+
+                          // Código de lote (con botón de escaneo)
+                          if (!widget.isManualEntry)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FormFields.buildFormField(
+                                    label: 'Código de lote',
+                                    hint:
+                                        'Escanee o ingrese el código del lote',
+                                    controller: widget.codigoLoteController,
+                                    readOnly: true,
+                                    required: false,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                ElevatedButton.icon(
+                                  onPressed: widget.onScanBarcode,
+                                  icon: const Icon(Icons.qr_code_scanner),
+                                  label: const Text('Escanear'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        MonitoreoStyles.accentColor,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                          if (!widget.isManualEntry) const SizedBox(height: 16),
+
+                          // Campos para entrada manual
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FormFields.buildDropdownField(
+                                  label: 'Casa',
+                                  hint: 'Seleccione casa',
+                                  options: widget.casas,
+                                  value: widget.selectedCasa,
+                                  onChanged: widget.onCasaChanged,
+                                  required: true,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: FormFields.buildNumberField(
+                                  label: 'Cantero',
+                                  hint: 'Ingrese el cantero',
+                                  controller: widget.canteroController,
+                                  required: true,
+                                  readOnly: !(widget.isManualEntry ||
+                                      widget.codigoLoteController.text.isNotEmpty),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FormFields.buildDropdownField(
+                                  label: 'Variedad',
+                                  hint: 'Seleccione variedad',
+                                  options: widget.variedades,
+                                  value: widget.selectedVariedad,
+                                  onChanged: widget.onVariedadChanged,
+                                  required: true,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: FormFields.buildFormField(
+                                  label: 'Responsable',
+                                  hint: 'Responsable del cultivo',
+                                  controller: widget.responsableController,
+                                  readOnly: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Sección para datos de monitoreo
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Datos del monitoreo',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: MonitoreoStyles.primaryColor,
+                            ),
+                          ),
+                          const Divider(height: 24),
+
+                          // Selección de plaga
+                          FormFields.buildDropdownField(
+                            label: 'Plaga',
+                            hint: 'Seleccione la plaga',
+                            options: widget.plagas,
+                            value: widget.selectedPlaga,
+                            onChanged: widget.onPlagaChanged,
+                            required: true,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Cantidades
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FormFields.buildFormField(
+                                  label: 'Cantidad observada',
+                                  hint: 'Calculada automáticamente',
+                                  controller: widget.cantidadController,
+                                  readOnly: true,
+                                  required: false,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: FormFields.buildNumberField(
+                                  label: 'Cantidad eliminada',
+                                  hint: 'Ingrese la cantidad',
+                                  controller: widget.cantidadBotadaController,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Comentarios
+                          FormFields.buildFormField(
+                            label: 'Comentarios',
+                            hint: 'Ingrese comentarios adicionales',
+                            controller: widget.comentariosController,
+                            maxLines: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Datos de muestras y niveles
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Muestras y niveles',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: MonitoreoStyles.primaryColor,
+                            ),
+                          ),
+                          const Divider(height: 24),
+
+                          // Información sobre niveles
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Información de niveles:',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: MonitoreoStyles.primaryColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                    'Nivel 1: Entre 0 y ${widget.limiteNivel1 ?? 10}'),
+                                Text(
+                                    'Nivel 2: Entre ${widget.limiteNivel1 != null ? widget.limiteNivel1! + 1 : 11} y ${widget.limiteNivel2 ?? 20}'),
+                                Text(
+                                    'Nivel 3: Mayor a ${widget.limiteNivel2 ?? 20}'),
+                              ],
+                            ),
+                          ),
+
+                          // Muestra 1
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: FormFields.buildNumberField(
+                                  label: 'Muestra 1',
+                                  hint: 'Valor numérico',
+                                  controller: widget.muestra1Controller,
+                                  onChanged: widget.onMuestra1Changed,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: FormFields.buildDropdownField(
+                                  label: 'Nivel manual 1',
+                                  hint: 'Nivel',
+                                  options: nivelesMuestra,
+                                  value: widget.selectedNivelMuestra1,
+                                  onChanged: widget.onNivelMuestra1Changed,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Muestra 2
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: FormFields.buildNumberField(
+                                  label: 'Muestra 2',
+                                  hint: 'Valor numérico',
+                                  controller: widget.muestra2Controller,
+                                  onChanged: widget.onMuestra2Changed,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: FormFields.buildDropdownField(
+                                  label: 'Nivel manual 2',
+                                  hint: 'Nivel',
+                                  options: nivelesMuestra,
+                                  value: widget.selectedNivelMuestra2,
+                                  onChanged: widget.onNivelMuestra2Changed,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Muestra 3
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: FormFields.buildNumberField(
+                                  label: 'Muestra 3',
+                                  hint: 'Valor numérico',
+                                  controller: widget.muestra3Controller,
+                                  onChanged: widget.onMuestra3Changed,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: FormFields.buildDropdownField(
+                                  label: 'Nivel manual 3',
+                                  hint: 'Nivel',
+                                  options: nivelesMuestra,
+                                  value: widget.selectedNivelMuestra3,
+                                  onChanged: widget.onNivelMuestra3Changed,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Información sobre niveles calculados automáticamente
+                          if (widget.muestra1Controller.text.isNotEmpty ||
+                              widget.muestra2Controller.text.isNotEmpty ||
+                              widget.muestra3Controller.text.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 16),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Niveles calculados automáticamente:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: MonitoreoStyles.accentColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (widget.muestra1Controller.text.isNotEmpty)
+                                    Text(
+                                        'Muestra 1: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra1Controller.text), widget.limiteNivel1, widget.limiteNivel2)}'),
+                                  if (widget.muestra2Controller.text.isNotEmpty)
+                                    Text(
+                                        'Muestra 2: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra2Controller.text), widget.limiteNivel1, widget.limiteNivel2)}'),
+                                  if (widget.muestra3Controller.text.isNotEmpty)
+                                    Text(
+                                        'Muestra 3: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra3Controller.text), widget.limiteNivel1, widget.limiteNivel2)}'),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Botones de acción
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: widget.onCancel,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.grey.shade700,
+                            side: BorderSide(color: Colors.grey.shade400),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 16),
+                        // BOTÓN PARCIAL
+                        ElevatedButton(
+                          onPressed:
+                              widget.isSubmitting ? null : widget.onSavePartial,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color(0xFFE91E63), // Color fucsia
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            disabledBackgroundColor: Colors.grey.shade400,
+                          ),
+                          child: const Text('Parcial'),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton(
+                          onPressed: widget.isSubmitting ? null : widget.onSave,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: MonitoreoStyles.accentColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            disabledBackgroundColor: Colors.grey.shade400,
+                          ),
+                          child: Text(
+                              widget.isCreatingNew ? 'Guardar' : 'Actualizar'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  // Layout para pantallas móviles
+  Widget _buildMobileLayout(List<String> nivelesMuestra) {
+    return widget.isSubmitting
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Título y controles de modo
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.isCreatingNew
+                              ? 'Nuevo Monitoreo'
+                              : 'Editar Monitoreo',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: MonitoreoStyles.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Toggle automático/manual
+                        Row(
+                          children: [
+                            const Text(
+                              'Modo:',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ToggleButtons(
+                                isSelected: [
+                                  !widget.isManualEntry,
+                                  widget.isManualEntry
+                                ],
+                                onPressed: (index) {
+                                  widget.onToggleEntryMode();
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                constraints: const BoxConstraints(
+                                  minHeight: 36,
+                                  minWidth: 80,
+                                ),
+                                children: const [
+                                  Text('Código',
+                                      style: TextStyle(fontSize: 13)),
+                                  Text('Manual',
+                                      style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Mensaje de error si existe
+                if (widget.errorMessage.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Text(
+                      widget.errorMessage,
+                      style: TextStyle(color: Colors.red.shade800),
+                    ),
+                  ),
+
+                // Indicador de modo offline
+                if (widget.isOfflineMode)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 8, top: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.wifi_off,
+                          color: Colors.red.shade800,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Modo sin conexión: Los cambios se guardarán localmente.',
+                            style: TextStyle(
+                              color: Colors.red.shade800,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Sección de información del lote (colapsable)
+                CollapsibleCard(
+                  title: 'Información del lote',
+                  initiallyExpanded: _isLoteExpanded,
+                  titleColor: MonitoreoStyles.primaryColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Código de lote (con botón de escaneo)
+                      if (!widget.isManualEntry)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FormFields.buildFormField(
+                              label: 'Código de lote',
+                              hint: 'Escanee o ingrese el código del lote',
+                              controller: widget.codigoLoteController,
+                              readOnly: true,
+                              required: false,
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: widget.onScanBarcode,
+                                icon:
+                                    const Icon(Icons.qr_code_scanner, size: 16),
+                                label: const Text('Escanear código'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: MonitoreoStyles.accentColor,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+
+                      // Campos para entrada manual
+                      FormFields.buildDropdownField(
+                        label: 'Casa',
+                        hint: 'Seleccione casa',
+                        options: widget.casas,
+                        value: widget.selectedCasa,
+                        onChanged: widget.onCasaChanged,
+                        required: true,
+                      ),
+                      const SizedBox(height: 12),
+
+                      FormFields.buildNumberField(
+                        label: 'Cantero',
+                        hint: 'Ingrese el cantero',
+                        controller: widget.canteroController,
+                        required: true,
+                        readOnly: !(widget.isManualEntry ||
+                            widget.codigoLoteController.text.isNotEmpty),
+                      ),
+                      const SizedBox(height: 12),
+
+                      FormFields.buildDropdownField(
+                        label: 'Variedad',
+                        hint: 'Seleccione variedad',
+                        options: widget.variedades,
+                        value: widget.selectedVariedad,
+                        onChanged: widget.onVariedadChanged,
+                        required: true,
+                      ),
+                      const SizedBox(height: 12),
+
+                      FormFields.buildFormField(
+                        label: 'Responsable',
+                        hint: 'Responsable del cultivo',
+                        controller: widget.responsableController,
+                        readOnly: true,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Sección para datos de monitoreo (colapsable)
+                CollapsibleCard(
+                  title: 'Datos del monitoreo',
+                  initiallyExpanded: _isMonitoreoExpanded,
+                  titleColor: MonitoreoStyles.primaryColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Selección de plaga
+                      FormFields.buildDropdownField(
+                        label: 'Plaga',
+                        hint: 'Seleccione la plaga',
+                        options: widget.plagas,
+                        value: widget.selectedPlaga,
+                        onChanged: widget.onPlagaChanged,
+                        required: true,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Cantidades
+                      FormFields.buildFormField(
+                        label: 'Cantidad observada',
+                        hint: 'Calculada automáticamente',
+                        controller: widget.cantidadController,
+                        readOnly: true,
+                        required: false,
+                      ),
+                      const SizedBox(height: 12),
+
+                      FormFields.buildNumberField(
+                        label: 'Cantidad eliminada',
+                        hint: 'Ingrese la cantidad',
+                        controller: widget.cantidadBotadaController,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Comentarios
+                      FormFields.buildFormField(
+                        label: 'Comentarios',
+                        hint: 'Ingrese comentarios adicionales',
+                        controller: widget.comentariosController,
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Datos de muestras y niveles (colapsable)
+                CollapsibleCard(
+                  title: 'Muestras y niveles',
+                  initiallyExpanded: _isMuestrasExpanded,
+                  titleColor: MonitoreoStyles.primaryColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Información sobre niveles
+                      ExpansionTile(
+                        title: Text(
+                          'Información de niveles',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: MonitoreoStyles.primaryColor,
+                          ),
+                        ),
+                        collapsedIconColor: MonitoreoStyles.primaryColor,
+                        iconColor: MonitoreoStyles.primaryColor,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Nivel 1: Entre 0 y ${widget.limiteNivel1 ?? 10}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                Text(
+                                  'Nivel 2: Entre ${widget.limiteNivel1 != null ? widget.limiteNivel1! + 1 : 11} y ${widget.limiteNivel2 ?? 20}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                Text(
+                                  'Nivel 3: Mayor a ${widget.limiteNivel2 ?? 20}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Muestras
+                      // Muestra 1
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: FormFields.buildNumberField(
+                              label: 'Muestra 1',
+                              hint: 'Valor numérico',
+                              controller: widget.muestra1Controller,
+                              onChanged: widget.onMuestra1Changed,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: FormFields.buildDropdownField(
+                              label: 'Nivel manual 1',
+                              hint: 'Nivel',
+                              options: nivelesMuestra,
+                              value: widget.selectedNivelMuestra1,
+                              onChanged: widget.onNivelMuestra1Changed,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Muestra 2
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: FormFields.buildNumberField(
+                              label: 'Muestra 2',
+                              hint: 'Valor numérico',
+                              controller: widget.muestra2Controller,
+                              onChanged: widget.onMuestra2Changed,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: FormFields.buildDropdownField(
+                              label: 'Nivel manual 2',
+                              hint: 'Nivel',
+                              options: nivelesMuestra,
+                              value: widget.selectedNivelMuestra2,
+                              onChanged: widget.onNivelMuestra2Changed,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Muestra 3
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: FormFields.buildNumberField(
+                              label: 'Muestra 3',
+                              hint: 'Valor numérico',
+                              controller: widget.muestra3Controller,
+                              onChanged: widget.onMuestra3Changed,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: FormFields.buildDropdownField(
+                              label: 'Nivel manual 3',
+                              hint: 'Nivel',
+                              options: nivelesMuestra,
+                              value: widget.selectedNivelMuestra3,
+                              onChanged: widget.onNivelMuestra3Changed,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Información sobre niveles calculados automáticamente
+                      if (widget.muestra1Controller.text.isNotEmpty ||
+                          widget.muestra2Controller.text.isNotEmpty ||
+                          widget.muestra3Controller.text.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(top: 16),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Niveles calculados automáticamente:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: MonitoreoStyles.accentColor,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              if (widget.muestra1Controller.text.isNotEmpty)
+                                Text(
+                                  'Muestra 1: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra1Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              if (widget.muestra2Controller.text.isNotEmpty)
+                                Text(
+                                  'Muestra 2: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra2Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              if (widget.muestra3Controller.text.isNotEmpty)
+                                Text(
+                                  'Muestra 3: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra3Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Botones de acción (fijos en la parte inferior para móvil)
+                Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed:
+                                widget.isSubmitting ? null : widget.onSave,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: MonitoreoStyles.accentColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              disabledBackgroundColor: Colors.grey.shade400,
+                            ),
+                            child: Text(
+                              widget.isCreatingNew ? 'Guardar' : 'Actualizar',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            // Botón parcial
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: widget.isSubmitting
+                                    ? null
+                                    : widget.onSavePartial,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE91E63),
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  disabledBackgroundColor: Colors.grey.shade400,
+                                ),
+                                child: const Text('Guardar parcial'),
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            // Botón cancelar
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: widget.onCancel,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.grey.shade700,
+                                  side: BorderSide(color: Colors.grey.shade400),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                                child: const Text('Cancelar'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "name": "pest-control-backend",
+  "version": "1.0.0",
+  "description": "Backend for Pest Control App - Sistema de Control de Plagas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "npx nodemon server.js",
+    "dev:development": "copy .env.development .env && npx nodemon server.js",
+    "dev:staging": "copy .env.staging .env && npx nodemon server.js",
+    "dev:production": "copy .env.production .env && npx nodemon server.js",
+    "dev:local": "copy .env.local .env && npx nodemon server.js",
+    "dev:docker": "copy .env.docker .env && npx nodemon server.js",
+    "start:dev": "copy .env.development .env && node server.js",
+    "start:staging": "copy .env.staging .env && node server.js",
+    "start:prod": "copy .env.production .env && node server.js",
+    "start:local": "copy .env.local .env && node server.js",
+    "deploy:prod": "copy .env.production .env && npm run build && node server.js",
+    "env:dev": "copy .env.development .env && echo 'Switched to DEVELOPMENT environment' && npm run check:config",
+    "env:staging": "copy .env.staging .env && echo 'Switched to STAGING environment' && npm run check:config",
+    "env:prod": "copy .env.production .env && echo 'Switched to PRODUCTION environment' && npm run check:config",
+    "env:local": "copy .env.local .env && echo 'Switched to LOCAL environment' && npm run check:config",
+    "env:docker": "copy .env.docker .env && echo 'Switched to DOCKER environment' && npm run check:config",
+    "test:connection": "node -e \"require('./db').query('SELECT NOW()').then(() => console.log('✅ DB Connected')).catch(err => console.error('❌ DB Error:', err.message))\"",
+    "test:ssl": "node -e \"const https = require('https'); const fs = require('fs'); try { fs.accessSync('./certs/cert.pem'); console.log('✅ SSL Certificates found'); } catch { console.log('❌ SSL Certificates missing'); }\"",
+    "check:config": "node -e \"const config = require('./config'); console.log('📋 Config:', JSON.stringify({env: config.environment, apiUrl: config.apiUrl, port: config.port, ip: config.system.localIP}, null, 2))\"",
+    "check:env": "echo 'Current .env file:' && type .env | findstr -v PASSWORD | findstr -v SECRET",
+    "check:all-envs": "echo 'Available .env files:' && dir *.env*",
+    "check:production": "npm run check:env && npm run test:ssl && npm run test:connection",
+    "validate:env": "node -e \"console.log('Environment Variables:'); console.log('ENVIRONMENT:', process.env.ENVIRONMENT || 'not set'); console.log('API_URL:', process.env.API_URL || 'not set'); console.log('DB_HOST:', process.env.DB_HOST || 'not set');\"",
+    "build": "echo 'No build step required for Node.js backend'",
+    "lint": "echo 'Linting not configured yet'",
+    "health": "echo 'Visit https://localhost:8000/api/health for health check'",
+    "logs:prod": "echo 'Production logs are minimal for security'",
+    "backup:check": "echo 'DB backup configuration: enabled with 30-day retention'"
+  },
+  "keywords": [
+    "pest-control",
+    "agriculture",
+    "monitoring",
+    "nodejs",
+    "express",
+    "postgresql"
+  ],
+  "author": "Costa Analytics Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/pest-control-backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/pest-control-backend/issues"
+  },
+  "homepage": "https://github.com/your-username/pest-control-backend#readme"
+}

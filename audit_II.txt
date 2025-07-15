@@ -1,0 +1,37 @@
+ COMANDOS CORREGIDOS PARA POWERSHELL:
+SECUENCIA DE VALIDACIÓN RÁPIDA (5 minutos)
+powershell# 1. Estado general
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 2. Seguridad de dependencias  
+cd C:\Users\owner\desktop\pestcontrol\backend
+npm audit
+
+# 3. Verificar HTTPS funcional (usando curl dentro del contenedor)
+docker exec pest_control_backend curl -k -I https://localhost:8000
+docker exec pest_control_frontend curl -k -I https://localhost:8080
+
+# 4. Confirmar base de datos
+docker exec -it pest_control_db psql -U pestuser -d pest_control -c "SELECT count(*) FROM pm_usuarios;"
+
+# 5. Logs sin errores
+docker logs pest_control_backend --tail 10
+ALTERNATIVAS SI CURL DA PROBLEMAS:
+powershell# Usar PowerShell nativo para verificar conectividad
+Test-NetConnection localhost -Port 8000
+Test-NetConnection localhost -Port 8080
+
+# Verificar con Invoke-WebRequest (si necesitas headers)
+try { 
+    Invoke-WebRequest -Uri https://localhost:8080 -SkipCertificateCheck | Select-Object StatusCode
+} catch { 
+    Write-Host "Revisar configuración HTTPS" 
+}
+COMANDOS DE EMERGENCIA POWERSHELL:
+powershell# Si algo falla durante presentación
+docker-compose down
+Start-Sleep 5
+docker-compose up -d
+
+# Verificación inmediata
+docker ps
