@@ -20,44 +20,58 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'javascript', 'dart' ]
+        language: [ 'javascript' ]  # Solo JavaScript por ahora, Dart requiere configuración especial
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup Flutter/Dart
-      if: matrix.language == 'dart'
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.16.0'
-        channel: 'stable'
-
     - name: Setup Node.js
-      if: matrix.language == 'javascript'
       uses: actions/setup-node@v4
       with:
         node-version: '18'
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
         queries: security-extended,security-and-quality
 
-    - name: Install Dependencies (Flutter)
-      if: matrix.language == 'dart'
+    - name: Install Dependencies (Node.js)
+      run: |
+        cd backend
+        npm install --only=prod
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
+
+  # Análisis separado para Dart usando herramientas específicas
+  dart-analysis:
+    name: Dart Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter/Dart
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+
+    - name: Install Dependencies
       run: |
         cd frontend
         flutter pub get
 
-    - name: Install Dependencies (Node.js)
-      if: matrix.language == 'javascript'
+    - name: Run Dart Analyzer
       run: |
-        cd backend
-        npm install
+        cd frontend
+        dart analyze --fatal-infos
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-      with:
-        category: "/language:${{matrix.language}}"
+    - name: Run Flutter Security Audit
+      run: |
+        cd frontend
+        flutter pub deps --json | dart pub global run pana
