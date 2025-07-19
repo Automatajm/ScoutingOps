@@ -3,7 +3,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const https = require('https');
 const fs = require('fs');
-const rateLimit = require('express-rate-limit'); // 🔒 NUEVO: Rate limiting
+const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const db = require('./db');
 const path = require('path');
@@ -154,7 +154,6 @@ const Logger = {
     }
   },
 
-  // 🔒 NUEVO: Logger para rate limiting
   rateLimitExceeded: (req, limitType) => {
     const clientIP = req.headers['x-forwarded-for'] || 
                      req.headers['x-real-ip'] || 
@@ -351,16 +350,94 @@ app.use(cors({
 // 🔒 Rate limiter general ANTES de otros middlewares
 app.use(generalLimiter);
 
-// ===== MIDDLEWARE ADICIONAL =====
+// ===== MIDDLEWARE ADICIONAL SEGURO =====
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  // 🔒 CORS SEGURO: Solo orígenes whitelisteados con credenciales
+  const requestOrigin = req.headers.origin;
+  
+  // Verificar si el origen está en la whitelist
+  const isOriginAllowed = requestOrigin && allowedOrigins.some(allowedOrigin => {
+    if (typeof allowedOrigin === 'string') {
+      return requestOrigin === allowedOrigin;
+    } else if (allowedOrigin instanceof RegExp) {
+      return allowedOrigin.test(requestOrigin);
+    }
+    return false;
+  });
+  
+  // Solo establecer headers CORS para orígenes permitidos
+  if (isOriginAllowed) {
+    // ✅ SEGURO: Origin específico validado
+    res.header('Access-Control-Allow-Origin', requestOrigin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  } else if (isDevelopment && !requestOrigin) {
+    // Solo en desarrollo: permitir requests sin origin (Postman, curl, etc.)
+    res.header('Access-Control-Allow-Origin', '*');
+    // ✅ NO permitir credenciales con origen wildcard
+    res.header('Access-Control-Allow-Credentials', 'false');
+  } else {
+    // ❌ Origen no permitido: no establecer headers CORS
+    if (requestOrigin) {
+      Logger.security('CORS: Origen no permitido intentando acceso con credenciales', {
+        origin: requestOrigin,
+        ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent']
+      });
+    }
+    
+    // No establecer headers CORS para orígenes no permitidos
+    // El navegador bloqueará la request
+  }
+  
+  // Headers comunes que son seguros
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, ngrok-skip-browser-warning');
+  res.header('Access-Control-Max-Age', '3600'); // Cache preflight por 1 hora
   
+  // Manejar preflight requests
   if (req.method === 'OPTIONS') {
-    res.status(204).send();
+    if (isOriginAllowed || (isDevelopment && !requestOrigin)) {
+      res.status(204).send();
+    } else {
+      Logger.security('CORS: Preflight bloqueado para origen no permitido', requestOrigin);
+      res.status(403).json({
+        success: false,
+        message: 'Origen no permitido',
+        error: 'CORS_ORIGIN_NOT_ALLOWED'
+      });
+    }
     return;
+  }
+  
+  next();
+});
+
+// 🔒 MIDDLEWARE ADICIONAL DE SEGURIDAD CORS
+app.use((req, res, next) => {
+  // Verificar que no se esté intentando un ataque CORS
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  
+  // Detectar intentos de ataque CORS
+  if (origin === 'null' && req.headers['access-control-request-method']) {
+    Logger.security('CORS: Intento de ataque con origin null detectado', {
+      ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      referer: referer
+    });
+  }
+  
+  // Logging adicional en producción para monitoreo
+  if (isProduction && origin && !allowedOrigins.some(allowed => {
+    if (typeof allowed === 'string') return origin === allowed;
+    if (allowed instanceof RegExp) return allowed.test(origin);
+    return false;
+  })) {
+    Logger.security('CORS: Intento de acceso desde origen no autorizado en producción', {
+      origin: origin,
+      path: req.path,
+      method: req.method
+    });
   }
   
   next();
@@ -379,7 +456,7 @@ app.use((req, res, next) => {
   
   Logger.api(req.method, req.path, req.headers.origin);
   
-  // 🔒 NUEVO: Log rate limit info si está disponible
+  // 🔒 Log rate limit info si está disponible
   if (req.rateLimit && !isProduction) {
     console.debug(`Rate Limit Info: ${req.rateLimit.remaining}/${req.rateLimit.limit} remaining for ${clientIP}`);
   }
@@ -506,7 +583,6 @@ app.get('/', (req, res) => {
         allowedOrigins: allowedOrigins.length,
         currentOrigin: req.headers.origin || 'No origin'
       },
-      // 🔒 NUEVO: Rate limit info
       rateLimitInfo: req.rateLimit ? {
         remaining: req.rateLimit.remaining,
         total: req.rateLimit.limit,
@@ -746,7 +822,7 @@ function formatUptime(seconds) {
 
 // ===== MANEJO DE ERRORES =====
 app.use((err, req, res, next) => {
-  // 🔒 NUEVO: Log específico si es error de rate limiting
+  // 🔒 Log específico si es error de rate limiting
   if (err.status === 429 || err.type === 'rate_limit') {
     Logger.rateLimitExceeded(req, 'MIDDLEWARE_ERROR');
   } else {
@@ -796,18 +872,18 @@ const server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0'
   Logger.startup(`Entorno: ${config.environment}`);
   Logger.startup(`Versión: ${config.version}`);
   
-  // 🔒 NUEVO: Log de configuración de rate limiting
+  // 🔒 Log de configuración de seguridad
   Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
   Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
   Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
   Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
   Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
+  Logger.startup(`CORS Security: Whitelist-only mode with ${allowedOrigins.length} allowed origins`);
   
   if (!isProduction) {
     Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
     Logger.startup(`URL Red HTTPS: https://10.0.0.19:${config.port}`);
     Logger.startup(`Sistema: ${config.system.platform} - ${config.system.hostname}`);
-    Logger.startup(`CORS: Configurado para ${allowedOrigins.length} orígenes`);
   }
   
   // Probar conexión a la base de datos
