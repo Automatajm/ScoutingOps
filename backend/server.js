@@ -648,8 +648,8 @@ app.use((req, res) => {
 
 // ===== CONFIGURACIÓN SSL =====
 const sslOptions = {
-  key: fs.readFileSync('./certs/key.pem'),
-  cert: fs.readFileSync('./certs/cert.pem')
+  key: fs.readFileSync('../key.pem'),
+  cert: fs.readFileSync('../cert.pem')
 };
 
 // ===== INICIALIZACIÓN DEL SERVIDOR =====
