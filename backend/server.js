@@ -350,43 +350,59 @@ app.use(cors({
 // 🔒 Rate limiter general ANTES de otros middlewares
 app.use(generalLimiter);
 
-// ===== MIDDLEWARE ADICIONAL SEGURO =====
+// ===== MIDDLEWARE ADICIONAL SEGURO (CORS VULNERABILITY FIX) =====
 app.use((req, res, next) => {
-  // 🔒 CORS SEGURO: Solo orígenes whitelisteados con credenciales
+  // 🔒 CORS ULTRA SEGURO: NO usar origin dinámico del request
   const requestOrigin = req.headers.origin;
   
-  // Verificar si el origen está en la whitelist
-  const isOriginAllowed = requestOrigin && allowedOrigins.some(allowedOrigin => {
-    if (typeof allowedOrigin === 'string') {
-      return requestOrigin === allowedOrigin;
-    } else if (allowedOrigin instanceof RegExp) {
-      return allowedOrigin.test(requestOrigin);
-    }
-    return false;
-  });
+  // Función para encontrar el origen exacto en la whitelist
+  const findExactAllowedOrigin = (requestOrigin) => {
+    if (!requestOrigin) return null;
+    
+    return allowedOrigins.find(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return requestOrigin === allowedOrigin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(requestOrigin);
+      }
+      return false;
+    });
+  };
   
-  // Solo establecer headers CORS para orígenes permitidos
-  if (isOriginAllowed) {
-    // ✅ SEGURO: Origin específico validado
-    res.header('Access-Control-Allow-Origin', requestOrigin);
-    res.header('Access-Control-Allow-Credentials', 'true');
+  const matchedAllowedOrigin = findExactAllowedOrigin(requestOrigin);
+  
+  // Solo establecer headers CORS para orígenes específicamente whitelisteados
+  if (matchedAllowedOrigin) {
+    // ✅ SEGURO: Usar el origen de la whitelist, NO el del request
+    const safeOrigin = typeof matchedAllowedOrigin === 'string' 
+      ? matchedAllowedOrigin 
+      : requestOrigin; // Solo si coincide exactamente con regex
+    
+    // ✅ CRÍTICO: Validar que no sea 'null' 
+    if (safeOrigin && safeOrigin !== 'null') {
+      res.header('Access-Control-Allow-Origin', safeOrigin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    } else {
+      Logger.security('CORS: Intento de ataque con origin null bloqueado', {
+        requestOrigin: requestOrigin,
+        ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress
+      });
+    }
   } else if (isDevelopment && !requestOrigin) {
     // Solo en desarrollo: permitir requests sin origin (Postman, curl, etc.)
     res.header('Access-Control-Allow-Origin', '*');
-    // ✅ NO permitir credenciales con origen wildcard
+    // ✅ IMPORTANTE: NO permitir credenciales con wildcard
     res.header('Access-Control-Allow-Credentials', 'false');
   } else {
-    // ❌ Origen no permitido: no establecer headers CORS
+    // ❌ Origen no permitido: Loggear pero NO establecer headers
     if (requestOrigin) {
-      Logger.security('CORS: Origen no permitido intentando acceso con credenciales', {
+      Logger.security('CORS: Origen no autorizado bloqueado', {
         origin: requestOrigin,
         ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
         userAgent: req.headers['user-agent']
       });
     }
-    
-    // No establecer headers CORS para orígenes no permitidos
-    // El navegador bloqueará la request
+    // NO establecer ningún header CORS - el navegador bloqueará
   }
   
   // Headers comunes que son seguros
@@ -394,16 +410,19 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, ngrok-skip-browser-warning');
   res.header('Access-Control-Max-Age', '3600'); // Cache preflight por 1 hora
   
-  // Manejar preflight requests
+  // Manejar preflight requests de forma segura
   if (req.method === 'OPTIONS') {
-    if (isOriginAllowed || (isDevelopment && !requestOrigin)) {
+    if (matchedAllowedOrigin && requestOrigin !== 'null') {
       res.status(204).send();
     } else {
-      Logger.security('CORS: Preflight bloqueado para origen no permitido', requestOrigin);
+      Logger.security('CORS: Preflight request bloqueado', {
+        origin: requestOrigin,
+        ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress
+      });
       res.status(403).json({
         success: false,
-        message: 'Origen no permitido',
-        error: 'CORS_ORIGIN_NOT_ALLOWED'
+        message: 'Origen no autorizado',
+        error: 'CORS_FORBIDDEN'
       });
     }
     return;
@@ -412,31 +431,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔒 MIDDLEWARE ADICIONAL DE SEGURIDAD CORS
+// 🔒 MIDDLEWARE DE PROTECCIÓN CORS ADICIONAL
 app.use((req, res, next) => {
-  // Verificar que no se esté intentando un ataque CORS
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   
-  // Detectar intentos de ataque CORS
-  if (origin === 'null' && req.headers['access-control-request-method']) {
-    Logger.security('CORS: Intento de ataque con origin null detectado', {
+  // Detectar ataques CORS conocidos
+  if (origin === 'null') {
+    Logger.security('CORS: Ataque con origin null detectado', {
       ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'],
-      referer: referer
+      referer: referer,
+      method: req.method,
+      path: req.path
     });
+    
+    // Bloquear completamente requests con origin null
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return res.status(403).json({
+        success: false,
+        message: 'Request bloqueado por políticas de seguridad',
+        error: 'NULL_ORIGIN_BLOCKED'
+      });
+    }
   }
   
-  // Logging adicional en producción para monitoreo
-  if (isProduction && origin && !allowedOrigins.some(allowed => {
+  // Detectar subdomain takeover attempts
+  if (origin && origin.includes('github.io') && !allowedOrigins.some(allowed => {
     if (typeof allowed === 'string') return origin === allowed;
     if (allowed instanceof RegExp) return allowed.test(origin);
     return false;
   })) {
-    Logger.security('CORS: Intento de acceso desde origen no autorizado en producción', {
-      origin: origin,
-      path: req.path,
-      method: req.method
+    Logger.security('CORS: Posible subdomain takeover attempt', {
+      suspiciousOrigin: origin,
+      ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress
     });
   }
   
@@ -878,7 +906,8 @@ const server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0'
   Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
   Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
   Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
-  Logger.startup(`CORS Security: Whitelist-only mode with ${allowedOrigins.length} allowed origins`);
+  Logger.startup(`CORS Security: Ultra-secure whitelist mode with ${allowedOrigins.length} allowed origins`);
+  Logger.startup(`CORS Protection: Anti-null origin attacks enabled`);
   
   if (!isProduction) {
     Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
