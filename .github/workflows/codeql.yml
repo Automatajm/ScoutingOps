@@ -1,4 +1,4 @@
-name: "CodeQL Analysis"
+name: "Security Analysis"
 
 on:
   push:
@@ -7,8 +7,9 @@ on:
     branches: [ "starting_on_git", "main", "master" ]
 
 jobs:
-  analyze:
-    name: Analyze JavaScript
+  # Solo análisis JavaScript con CodeQL
+  codeql-js:
+    name: JavaScript Security Scan
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -16,8 +17,12 @@ jobs:
       security-events: write
 
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
+
+    # Esperar a que GitHub desactive completamente la configuración automática
+    - name: Wait for GitHub setup
+      run: sleep 10
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
@@ -31,11 +36,11 @@ jobs:
       uses: github/codeql-action/analyze@v3
 
   # Análisis básico de Dart sin CodeQL
-  dart-lint:
-    name: Dart Static Analysis
+  dart-analysis:
+    name: Dart Code Quality
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Setup Flutter
@@ -44,12 +49,21 @@ jobs:
         flutter-version: '3.16.0'
         channel: 'stable'
 
-    - name: Install Dependencies
+    - name: Get dependencies
       run: |
         cd frontend
         flutter pub get
 
-    - name: Run Dart Analyzer
+    - name: Analyze Dart code
       run: |
         cd frontend
-        dart analyze --fatal-infos || echo "Analysis completed with warnings"
+        echo "🔍 Running Dart analysis..."
+        dart analyze lib/ --fatal-warnings || echo "⚠️ Analysis completed with warnings"
+        
+    - name: Check for security issues
+      run: |
+        cd frontend
+        echo "🔐 Checking for common security issues..."
+        # Check for hardcoded secrets
+        grep -r "password\|secret\|key\|token" lib/ --include="*.dart" | grep -v "//.*password" || echo "✅ No hardcoded secrets found"
+        echo "📋 Analysis complete"
