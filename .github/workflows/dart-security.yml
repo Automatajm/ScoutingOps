@@ -1,0 +1,111 @@
+
+
+name: "Dart Security Analysis"
+
+on:
+  push:
+    branches: [ "starting_on_git", "main", "master" ]
+  pull_request:
+    branches: [ "starting_on_git", "main", "master" ]
+
+jobs:
+  dart-security:
+    name: Dart Security & Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0'  # Versión más reciente
+        channel: 'stable'
+
+    - name: Disable Flutter analytics
+      run: flutter config --no-analytics
+
+    - name: Get dependencies
+      run: |
+        cd frontend
+        flutter pub get --no-example
+
+    - name: 1. Dart Static Analysis
+      run: |
+        cd frontend
+        echo "🔍 Running Dart static analysis..."
+        dart analyze lib/ || echo "⚠️ Analysis completed with issues"
+
+    - name: 2. Security Pattern Check
+      run: |
+        cd frontend
+        echo "🔐 Checking for security vulnerabilities..."
+        
+        echo "📋 Searching for hardcoded secrets..."
+        grep -r -i "password\s*=\s*['\"]" lib/ --include="*.dart" && echo "❌ Found hardcoded passwords!" || echo "✅ No hardcoded passwords"
+        grep -r -i "api[_-]?key\s*=\s*['\"]" lib/ --include="*.dart" && echo "❌ Found hardcoded API keys!" || echo "✅ No hardcoded API keys"
+        grep -r -i "secret\s*=\s*['\"]" lib/ --include="*.dart" && echo "❌ Found hardcoded secrets!" || echo "✅ No hardcoded secrets"
+        grep -r -i "token\s*=\s*['\"]" lib/ --include="*.dart" && echo "❌ Found hardcoded tokens!" || echo "✅ No hardcoded tokens"
+        
+        echo "📋 Checking for insecure HTTP usage..."
+        grep -r "http://" lib/ --include="*.dart" && echo "❌ Found insecure HTTP URLs!" || echo "✅ No insecure HTTP found"
+        
+        echo "📋 Checking for debug mode in production..."
+        grep -r "kDebugMode.*false" lib/ --include="*.dart" && echo "❌ Debug mode issues found!" || echo "✅ No debug mode issues"
+        
+        echo "📋 Checking for dangerous permissions..."
+        grep -r -i "android.permission" android/ && echo "❌ Review Android permissions!" || echo "✅ Standard permissions"
+
+    - name: 3. Dependency Security Audit
+      run: |
+        cd frontend
+        echo "📦 Checking for vulnerable dependencies..."
+        flutter pub deps --json > deps.json
+        
+        # Check for known vulnerable packages
+        echo "Scanning for known vulnerable packages..."
+        cat deps.json | grep -i "connectivity_plus.*5.0.2" && echo "❌ connectivity_plus 5.0.2 has known issues!" || echo "✅ connectivity_plus version OK"
+        
+        # Check for outdated critical packages
+        flutter pub outdated --json > outdated.json || true
+        echo "📊 Dependency analysis complete"
+
+    - name: 4. Code Quality Metrics
+      run: |
+        cd frontend
+        echo "📊 Analyzing code quality metrics..."
+        
+        # Count potential security issues
+        echo "🔢 Counting potential issues:"
+        echo "TODO comments: $(grep -r "TODO" lib/ --include="*.dart" | wc -l)"
+        echo "FIXME comments: $(grep -r "FIXME" lib/ --include="*.dart" | wc -l)"
+        echo "Hardcoded strings: $(grep -r "String.*=.*['\"]http" lib/ --include="*.dart" | wc -l)"
+        
+        # Check for proper error handling
+        echo "🛡️ Error handling check:"
+        echo "Try-catch blocks: $(grep -r "try\s*{" lib/ --include="*.dart" | wc -l)"
+        echo "Error classes: $(grep -r "class.*Error\|class.*Exception" lib/ --include="*.dart" | wc -l)"
+
+    - name: 5. Generate Security Report
+      run: |
+        cd frontend
+        echo "📋 Generating security summary..."
+        echo "# Dart Security Analysis Report" > security_report.md
+        echo "Generated on: $(date)" >> security_report.md
+        echo "" >> security_report.md
+        echo "## Dart Files Analyzed: $(find lib/ -name "*.dart" | wc -l)" >> security_report.md
+        echo "## Lines of Code: $(find lib/ -name "*.dart" -exec cat {} \; | wc -l)" >> security_report.md
+        echo "" >> security_report.md
+        echo "## Key Findings:" >> security_report.md
+        echo "- Static analysis completed" >> security_report.md
+        echo "- Security patterns checked" >> security_report.md
+        echo "- Dependencies audited" >> security_report.md
+        echo "" >> security_report.md
+        cat security_report.md
+
+    - name: 6. Upload Security Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: dart-security-report
+        path: frontend/security_report.md
