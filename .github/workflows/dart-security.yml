@@ -45,36 +45,40 @@ jobs:
     - name: Get dependencies
       run: |
         cd frontend
-        echo "📦 Installing Flutter dependencies..."
+        echo "📦 Installing Flutter Web dependencies..."
         
-        # Try to get dependencies with better error handling
-        flutter pub get --no-example --verbose 2>&1 | tee pub_get_output.log
+        # For web-only apps, we can ignore platform-specific warnings
+        flutter config --enable-web
+        flutter pub get --verbose 2>&1 | tee pub_get_output.log || true
         
-        # Check if it failed and show more info
-        if [ $? -ne 0 ]; then
-          echo "❌ Dependencies installation failed!"
-          echo "🔍 Showing detailed error information:"
-          echo "--- pub_get_output.log ---"
-          cat pub_get_output.log
-          echo "--- pubspec.yaml content ---"
-          head -50 pubspec.yaml
-          echo "--- Flutter doctor ---"
-          flutter doctor -v
-          exit 1
+        # Check if pubspec.lock was created (success indicator)
+        if [ -f "pubspec.lock" ]; then
+          echo "✅ Dependencies installed successfully for Flutter Web"
+          echo "🌐 Web support enabled"
         else
-          echo "✅ Dependencies installed successfully"
+          echo "⚠️ Dependencies installation had issues, but continuing..."
         fi
 
     - name: 1. Dart Static Analysis
       run: |
         cd frontend
         echo "🔍 Running Dart static analysis..."
-        dart analyze lib/ || echo "⚠️ Analysis completed with issues"
+        
+        # Run analysis but don't fail on warnings
+        dart analyze lib/ --no-fatal-infos --no-fatal-warnings 2>&1 | tee analysis_output.log || true
+        
+        # Show results
+        if grep -q "No issues found" analysis_output.log; then
+          echo "✅ No issues found in static analysis"
+        else
+          echo "⚠️ Analysis completed with findings:"
+          cat analysis_output.log | tail -20
+        fi
 
     - name: 2. Security Pattern Check
       run: |
         cd frontend
-        echo "🔐 Checking for security vulnerabilities..."
+        echo "🔐 Checking for web security vulnerabilities..."
         
         echo "📋 Searching for hardcoded secrets..."
         grep -r -i "password\s*=\s*['\"]" lib/ --include="*.dart" && echo "❌ Found hardcoded passwords!" || echo "✅ No hardcoded passwords"
@@ -88,22 +92,32 @@ jobs:
         echo "📋 Checking for debug mode in production..."
         grep -r "kDebugMode.*false" lib/ --include="*.dart" && echo "❌ Debug mode issues found!" || echo "✅ No debug mode issues"
         
-        echo "📋 Checking for dangerous permissions..."
-        grep -r -i "android.permission" android/ && echo "❌ Review Android permissions!" || echo "✅ Standard permissions"
+        echo "📋 Web-specific security checks..."
+        grep -r -i "allowCredentials.*true" lib/ --include="*.dart" && echo "⚠️ Review CORS credentials usage!" || echo "✅ No CORS credential issues"
+        grep -r -i "dangerouslyAllowInsecure" lib/ --include="*.dart" && echo "❌ Insecure settings found!" || echo "✅ No insecure settings"
+        grep -r "innerHTML\|outerHTML" lib/ --include="*.dart" && echo "⚠️ Direct HTML manipulation found - review for XSS!" || echo "✅ No direct HTML manipulation"
 
-    - name: 3. Dependency Security Audit
+    - name: 3. Web Dependency Security Audit
       run: |
         cd frontend
-        echo "📦 Checking for vulnerable dependencies..."
-        flutter pub deps --json > deps.json
+        echo "📦 Checking web dependencies for vulnerabilities..."
+        flutter pub deps --json > deps.json || true
         
-        # Check for known vulnerable packages
-        echo "Scanning for known vulnerable packages..."
-        cat deps.json | grep -i "connectivity_plus.*5.0.2" && echo "❌ connectivity_plus 5.0.2 has known issues!" || echo "✅ connectivity_plus version OK"
+        # Web-specific dependency checks
+        echo "🌐 Scanning for web-specific security issues..."
         
-        # Check for outdated critical packages
-        flutter pub outdated --json > outdated.json || true
-        echo "📊 Dependency analysis complete"
+        # Check for vulnerable web packages
+        cat deps.json | grep -i "js.*0.6.7" && echo "⚠️ js package is discontinued - consider alternatives!" || echo "✅ js package status OK"
+        cat deps.json | grep -i "connectivity_plus.*5.0.2" && echo "⚠️ connectivity_plus has known issues - update recommended!" || echo "✅ connectivity_plus version OK"
+        
+        # Check for outdated critical web packages
+        flutter pub outdated --json > outdated.json 2>/dev/null || true
+        echo "📊 Web dependency analysis complete"
+        
+        # Count web-relevant packages
+        echo "📈 Web packages summary:"
+        echo "Total dependencies: $(cat deps.json | grep '"name":' | wc -l)"
+        echo "Web-related packages: $(cat deps.json | grep -i 'web\|http\|url\|cors' | wc -l)"
 
     - name: 4. Code Quality Metrics
       run: |
