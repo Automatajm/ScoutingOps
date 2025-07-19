@@ -24,10 +24,46 @@ jobs:
     - name: Disable Flutter analytics
       run: flutter config --no-analytics
 
+    - name: Debug Environment
+      run: |
+        echo "🔍 Environment Debug Info:"
+        echo "Flutter version:"
+        flutter --version
+        echo ""
+        echo "Dart version:"
+        dart --version
+        echo ""
+        echo "Working directory contents:"
+        ls -la
+        echo ""
+        echo "Frontend directory contents:"
+        ls -la frontend/ || echo "Frontend directory not found"
+        echo ""
+        echo "Pubspec.yaml exists:"
+        test -f frontend/pubspec.yaml && echo "✅ Found pubspec.yaml" || echo "❌ pubspec.yaml not found"
+
     - name: Get dependencies
       run: |
         cd frontend
-        flutter pub get --no-example
+        echo "📦 Installing Flutter dependencies..."
+        
+        # Try to get dependencies with better error handling
+        flutter pub get --no-example --verbose 2>&1 | tee pub_get_output.log
+        
+        # Check if it failed and show more info
+        if [ $? -ne 0 ]; then
+          echo "❌ Dependencies installation failed!"
+          echo "🔍 Showing detailed error information:"
+          echo "--- pub_get_output.log ---"
+          cat pub_get_output.log
+          echo "--- pubspec.yaml content ---"
+          head -50 pubspec.yaml
+          echo "--- Flutter doctor ---"
+          flutter doctor -v
+          exit 1
+        else
+          echo "✅ Dependencies installed successfully"
+        fi
 
     - name: 1. Dart Static Analysis
       run: |
