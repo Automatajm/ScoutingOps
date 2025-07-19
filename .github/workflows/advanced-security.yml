@@ -1,5 +1,4 @@
-# [Copia el contenido del artifact de arriba]
-name: "🔒 Advanced Security Analysis"
+name: "Advanced Security Analysis"
 
 on:
   push:
@@ -7,7 +6,6 @@ on:
   pull_request:
     branches: [ "starting_on_git", "main", "master" ]
   schedule:
-    # Run security scan daily at 2 AM
     - cron: '0 2 * * *'
 
 env:
@@ -15,300 +13,247 @@ env:
   NODE_VERSION: '18'
 
 jobs:
-  # ==========================================
-  # 1. FLUTTER/DART SECURITY ANALYSIS
-  # ==========================================
   flutter-security:
-    name: "🎯 Flutter/Dart Security Scan"
+    name: "Flutter/Dart Security Scan"
     runs-on: ubuntu-latest
     outputs:
       security-score: ${{ steps.security-score.outputs.score }}
       vulnerabilities-found: ${{ steps.security-score.outputs.vulnerabilities }}
     
     steps:
-    - name: "📁 Checkout Repository"
+    - name: "Checkout Repository"
       uses: actions/checkout@v4
 
-    - name: "🔧 Setup Flutter"
+    - name: "Setup Flutter"
       uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         channel: 'stable'
 
-    - name: "🌐 Configure for Web"
+    - name: "Configure for Web"
       run: |
         flutter config --enable-web --no-analytics
         cd frontend
-        echo "✅ Flutter Web configured"
+        echo "Flutter Web configured"
 
-    - name: "📦 Install Dependencies (Resilient)"
+    - name: "Install Dependencies"
       run: |
         cd frontend
-        echo "🔄 Installing Flutter dependencies..."
-        
-        # Resilient dependency installation
-        timeout 300 flutter pub get || echo "⚠️ Dependency warnings ignored for security analysis"
-        
-        # Verify we can proceed
+        echo "Installing Flutter dependencies..."
+        timeout 300 flutter pub get || echo "Dependency warnings ignored for security analysis"
         if [ -f "pubspec.lock" ] || [ -f "pubspec.yaml" ]; then
-          echo "✅ Ready for security analysis"
+          echo "Ready for security analysis"
         else
-          echo "❌ Cannot proceed with analysis"
+          echo "Cannot proceed with analysis"
           exit 1
         fi
 
-    - name: "🔍 Static Code Analysis"
+    - name: "Static Code Analysis"
       run: |
         cd frontend
-        echo "🔍 Running comprehensive Dart analysis..."
-        
-        # Create analysis report
+        echo "Running comprehensive Dart analysis..."
         echo "# Dart Static Analysis Report" > static_analysis.md
         echo "Generated: $(date)" >> static_analysis.md
         echo "" >> static_analysis.md
-        
-        # Run analysis with detailed output
         dart analyze lib/ --verbose 2>&1 | tee analysis.log || true
-        
-        # Parse results
         if grep -q "No issues found" analysis.log; then
-          echo "✅ No static analysis issues found"
-          echo "- ✅ No issues found" >> static_analysis.md
+          echo "No static analysis issues found"
+          echo "- No issues found" >> static_analysis.md
         else
-          echo "📊 Static analysis findings:"
+          echo "Static analysis findings detected"
           error_count=$(grep -c "error •" analysis.log || echo "0")
           warning_count=$(grep -c "warning •" analysis.log || echo "0")
           info_count=$(grep -c "info •" analysis.log || echo "0")
-          
           echo "- Errors: $error_count" >> static_analysis.md
           echo "- Warnings: $warning_count" >> static_analysis.md  
           echo "- Info: $info_count" >> static_analysis.md
           echo "" >> static_analysis.md
-          
-          # Add top issues to report
           echo "## Top Issues Found:" >> static_analysis.md
           grep -E "(error|warning)" analysis.log | head -10 >> static_analysis.md || true
         fi
 
-    - name: "🔐 Security Pattern Detection"
+    - name: "Security Pattern Detection"
       run: |
         cd frontend
-        echo "🔐 Scanning for security vulnerabilities..."
-        
-        # Initialize security report
+        echo "Scanning for security vulnerabilities..."
         echo "# Flutter Security Scan Report" > security_report.md
         echo "Generated: $(date)" >> security_report.md
         echo "" >> security_report.md
-        
         vulnerability_count=0
         
-        # 1. Hardcoded Secrets Detection
-        echo "## 🔑 Hardcoded Secrets Scan" >> security_report.md
-        echo "🔍 Scanning for hardcoded secrets..."
+        echo "## Hardcoded Secrets Scan" >> security_report.md
+        echo "Scanning for hardcoded secrets..."
         
         if find lib/ -name "*.dart" -exec grep -l "password\s*=\s*['\"][^'\"]*['\"]" {} \; | head -5; then
-          echo "❌ CRITICAL: Hardcoded passwords found!"
-          echo "- ❌ **CRITICAL**: Hardcoded passwords detected" >> security_report.md
+          echo "CRITICAL: Hardcoded passwords found!"
+          echo "- CRITICAL: Hardcoded passwords detected" >> security_report.md
           vulnerability_count=$((vulnerability_count + 3))
         else
-          echo "✅ No hardcoded passwords"
-          echo "- ✅ No hardcoded passwords" >> security_report.md
+          echo "No hardcoded passwords"
+          echo "- No hardcoded passwords" >> security_report.md
         fi
         
         if find lib/ -name "*.dart" -exec grep -l "api[_-]key\s*=\s*['\"][^'\"]*['\"]" {} \; | head -5; then
-          echo "❌ CRITICAL: Hardcoded API keys found!"
-          echo "- ❌ **CRITICAL**: Hardcoded API keys detected" >> security_report.md
+          echo "CRITICAL: Hardcoded API keys found!"
+          echo "- CRITICAL: Hardcoded API keys detected" >> security_report.md
           vulnerability_count=$((vulnerability_count + 3))
         else
-          echo "✅ No hardcoded API keys"
-          echo "- ✅ No hardcoded API keys" >> security_report.md
+          echo "No hardcoded API keys"
+          echo "- No hardcoded API keys" >> security_report.md
         fi
         
-        # 2. Insecure HTTP Detection
         echo "" >> security_report.md
-        echo "## 🌐 Network Security" >> security_report.md
+        echo "## Network Security" >> security_report.md
         if grep -r "http://" lib/ --include="*.dart" | grep -v "localhost\|127.0.0.1" | head -5; then
-          echo "❌ WARNING: Insecure HTTP URLs found!"
-          echo "- ⚠️ **WARNING**: Insecure HTTP URLs detected" >> security_report.md
+          echo "WARNING: Insecure HTTP URLs found!"
+          echo "- WARNING: Insecure HTTP URLs detected" >> security_report.md
           vulnerability_count=$((vulnerability_count + 1))
         else
-          echo "✅ No insecure HTTP URLs"
-          echo "- ✅ All URLs use HTTPS" >> security_report.md
+          echo "No insecure HTTP URLs"
+          echo "- All URLs use HTTPS" >> security_report.md
         fi
         
-        # 3. XSS Prevention Check
         echo "" >> security_report.md
-        echo "## 🛡️ XSS Prevention" >> security_report.md
+        echo "## XSS Prevention" >> security_report.md
         if grep -r "innerHTML\|dangerouslySetInnerHTML" lib/ --include="*.dart" | head -3; then
-          echo "⚠️ WARNING: Potential XSS vectors found!"
-          echo "- ⚠️ **WARNING**: Potential XSS vectors (innerHTML usage)" >> security_report.md
+          echo "WARNING: Potential XSS vectors found!"
+          echo "- WARNING: Potential XSS vectors (innerHTML usage)" >> security_report.md
           vulnerability_count=$((vulnerability_count + 2))
         else
-          echo "✅ No obvious XSS vectors"
-          echo "- ✅ No obvious XSS vectors detected" >> security_report.md
+          echo "No obvious XSS vectors"
+          echo "- No obvious XSS vectors detected" >> security_report.md
         fi
         
-        # 4. Debug Code Detection
         echo "" >> security_report.md
-        echo "## 🐛 Debug Code Analysis" >> security_report.md
+        echo "## Debug Code Analysis" >> security_report.md
         debug_count=$(grep -r "print\|debugPrint\|console\.log" lib/ --include="*.dart" | wc -l)
         if [ "$debug_count" -gt 10 ]; then
-          echo "⚠️ WARNING: High number of debug statements ($debug_count)"
-          echo "- ⚠️ **WARNING**: $debug_count debug statements found" >> security_report.md
+          echo "WARNING: High number of debug statements ($debug_count)"
+          echo "- WARNING: $debug_count debug statements found" >> security_report.md
         else
-          echo "✅ Acceptable debug statement count ($debug_count)"
-          echo "- ✅ Debug statements: $debug_count (acceptable)" >> security_report.md
+          echo "Acceptable debug statement count ($debug_count)"
+          echo "- Debug statements: $debug_count (acceptable)" >> security_report.md
         fi
         
-        # 5. Permission and Access Control
         echo "" >> security_report.md
-        echo "## 🔒 Access Control" >> security_report.md
+        echo "## Access Control" >> security_report.md
         if grep -r "allowCredentials\|cors" lib/ --include="*.dart" | head -3; then
-          echo "🔍 CORS configuration found - manual review needed"
-          echo "- 🔍 **REVIEW**: CORS configuration detected" >> security_report.md
+          echo "CORS configuration found - manual review needed"
+          echo "- REVIEW: CORS configuration detected" >> security_report.md
         else
-          echo "✅ No obvious CORS issues"
-          echo "- ✅ No obvious CORS configuration issues" >> security_report.md
+          echo "No obvious CORS issues"
+          echo "- No obvious CORS configuration issues" >> security_report.md
         fi
         
-        # Store vulnerability count for later steps
         echo "vulnerability_count=$vulnerability_count" >> $GITHUB_ENV
         echo "Vulnerability Count: $vulnerability_count" >> security_report.md
 
-    - name: "📊 Dependency Security Audit"
+    - name: "Dependency Security Audit"
       run: |
         cd frontend
-        echo "📦 Analyzing dependency security..."
-        
+        echo "Analyzing dependency security..."
         echo "" >> security_report.md
-        echo "## 📦 Dependency Security Analysis" >> security_report.md
-        
-        # Generate dependency tree
+        echo "## Dependency Security Analysis" >> security_report.md
         flutter pub deps --json > deps.json 2>/dev/null || echo "{}" > deps.json
-        
-        # Check for known vulnerable packages
-        echo "🔍 Checking for known vulnerable dependencies..."
-        
+        echo "Checking for known vulnerable dependencies..."
         vulnerable_deps=0
-        
-        # Check specific known vulnerabilities
         if cat deps.json | grep -q "connectivity_plus.*5.0.2"; then
-          echo "⚠️ WARNING: connectivity_plus 5.0.2 has known issues"
-          echo "- ⚠️ connectivity_plus 5.0.2 (known issues)" >> security_report.md
+          echo "WARNING: connectivity_plus 5.0.2 has known issues"
+          echo "- connectivity_plus 5.0.2 (known issues)" >> security_report.md
           vulnerable_deps=$((vulnerable_deps + 1))
         fi
-        
         if cat deps.json | grep -q "js.*0.6.7"; then
-          echo "⚠️ WARNING: js package is discontinued"
-          echo "- ⚠️ js 0.6.7 (discontinued package)" >> security_report.md
+          echo "WARNING: js package is discontinued"
+          echo "- js 0.6.7 (discontinued package)" >> security_report.md
           vulnerable_deps=$((vulnerable_deps + 1))
         fi
-        
-        # Count total dependencies
         dep_count=$(cat deps.json | jq '.packages | length' 2>/dev/null || echo "unknown")
         echo "- Total dependencies: $dep_count" >> security_report.md
         echo "- Potentially vulnerable: $vulnerable_deps" >> security_report.md
-        
         echo "vulnerable_deps=$vulnerable_deps" >> $GITHUB_ENV
 
-    - name: "📈 Calculate Security Score"
+    - name: "Calculate Security Score"
       id: security-score
       run: |
         cd frontend
-        
-        # Calculate security score (100 = perfect, 0 = many issues)
         base_score=100
         vuln_count=${vulnerability_count:-0}
         dep_vulns=${vulnerable_deps:-0}
-        
-        # Deduct points for issues
         score=$((base_score - (vuln_count * 10) - (dep_vulns * 5)))
-        
-        # Ensure score doesn't go below 0
         if [ $score -lt 0 ]; then
           score=0
         fi
-        
-        echo "🎯 Security Score: $score/100"
+        echo "Security Score: $score/100"
         echo "" >> security_report.md
-        echo "## 🎯 Security Score: $score/100" >> security_report.md
-        
+        echo "## Security Score: $score/100" >> security_report.md
         if [ $score -ge 90 ]; then
-          echo "✅ EXCELLENT security posture"
-          echo "Status: ✅ EXCELLENT" >> security_report.md
+          echo "EXCELLENT security posture"
+          echo "Status: EXCELLENT" >> security_report.md
         elif [ $score -ge 70 ]; then
-          echo "⚠️ GOOD security posture with minor issues"
-          echo "Status: ⚠️ GOOD (minor issues)" >> security_report.md
+          echo "GOOD security posture with minor issues"
+          echo "Status: GOOD (minor issues)" >> security_report.md
         elif [ $score -ge 50 ]; then
-          echo "⚠️ MODERATE security issues found"
-          echo "Status: ⚠️ MODERATE (review needed)" >> security_report.md
+          echo "MODERATE security issues found"
+          echo "Status: MODERATE (review needed)" >> security_report.md
         else
-          echo "❌ POOR security posture - immediate action needed"
-          echo "Status: ❌ POOR (immediate action needed)" >> security_report.md
+          echo "POOR security posture - immediate action needed"
+          echo "Status: POOR (immediate action needed)" >> security_report.md
         fi
-        
-        # Set outputs
         echo "score=$score" >> $GITHUB_OUTPUT
         echo "vulnerabilities=$vuln_count" >> $GITHUB_OUTPUT
 
-    - name: "📋 Generate Comprehensive Report"
+    - name: "Generate Comprehensive Report"
       run: |
         cd frontend
-        
-        # Combine all reports
         cat > final_security_report.md << EOF
-# 🔒 Flutter Security Analysis Report
-**Generated:** $(date)
-**Project:** PestControl Flutter Web App
-**Branch:** ${GITHUB_REF_NAME}
+        # Flutter Security Analysis Report
+        **Generated:** $(date)
+        **Project:** PestControl Flutter Web App
+        **Branch:** ${GITHUB_REF_NAME}
 
-## 📊 Executive Summary
-- **Security Score:** ${security-score}/100
-- **Vulnerabilities Found:** ${vulnerability_count:-0}
-- **Vulnerable Dependencies:** ${vulnerable_deps:-0}
-- **Dart Files Analyzed:** $(find lib/ -name "*.dart" | wc -l)
-- **Lines of Code:** $(find lib/ -name "*.dart" -exec cat {} \; | wc -l)
+        ## Executive Summary
+        - **Security Score:** ${{ steps.security-score.outputs.score }}/100
+        - **Vulnerabilities Found:** ${vulnerability_count:-0}
+        - **Vulnerable Dependencies:** ${vulnerable_deps:-0}
+        - **Dart Files Analyzed:** $(find lib/ -name "*.dart" | wc -l)
+        - **Lines of Code:** $(find lib/ -name "*.dart" -exec cat {} \; | wc -l)
 
----
+        ---
 
-EOF
-        
-        # Append detailed reports
+        EOF
         cat static_analysis.md >> final_security_report.md
         echo "" >> final_security_report.md
         echo "---" >> final_security_report.md
         echo "" >> final_security_report.md
         cat security_report.md >> final_security_report.md
-        
-        # Add recommendations
         cat >> final_security_report.md << EOF
 
----
+        ---
 
-## 🎯 Security Recommendations
+        ## Security Recommendations
 
-### Immediate Actions
-1. **Review and remove** any hardcoded secrets
-2. **Update vulnerable dependencies** to latest versions
-3. **Replace HTTP URLs** with HTTPS equivalents
-4. **Remove debug statements** from production code
+        ### Immediate Actions
+        1. **Review and remove** any hardcoded secrets
+        2. **Update vulnerable dependencies** to latest versions
+        3. **Replace HTTP URLs** with HTTPS equivalents
+        4. **Remove debug statements** from production code
 
-### Best Practices
-1. **Use environment variables** for all configuration
-2. **Implement proper input validation**
-3. **Regular dependency updates** 
-4. **Code review process** for security issues
+        ### Best Practices
+        1. **Use environment variables** for all configuration
+        2. **Implement proper input validation**
+        3. **Regular dependency updates** 
+        4. **Code review process** for security issues
 
-### Monitoring
-- Set up **automated dependency scanning**
-- **Regular security audits** (monthly)
-- **Monitor for new vulnerabilities** in used packages
+        ### Monitoring
+        - Set up **automated dependency scanning**
+        - **Regular security audits** (monthly)
+        - **Monitor for new vulnerabilities** in used packages
 
----
-*Report generated by GitHub Actions Security Workflow*
-EOF
+        ---
+        *Report generated by GitHub Actions Security Workflow*
+        EOF
 
-    - name: "📤 Upload Security Reports"
+    - name: "Upload Security Reports"
       uses: actions/upload-artifact@v4
       with:
         name: flutter-security-reports
@@ -318,161 +263,106 @@ EOF
           frontend/analysis.log
         retention-days: 30
 
-    - name: "💬 Comment Security Summary"
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const score = '${{ steps.security-score.outputs.score }}';
-          const vulns = '${{ steps.security-score.outputs.vulnerabilities }}';
-          
-          let emoji = '✅';
-          let status = 'EXCELLENT';
-          if (score < 90) { emoji = '⚠️'; status = 'GOOD'; }
-          if (score < 70) { emoji = '⚠️'; status = 'MODERATE'; }
-          if (score < 50) { emoji = '❌'; status = 'POOR'; }
-          
-          const body = `## 🔒 Flutter Security Analysis Results
-          
-          ${emoji} **Security Score:** ${score}/100 (${status})
-          🐛 **Vulnerabilities Found:** ${vulns}
-          
-          📋 **Full Report:** Check the uploaded artifacts for detailed analysis
-          
-          ${score < 70 ? '⚠️ **Action Required:** Security issues detected that need attention' : '✅ **Status:** Security analysis passed'}
-          `;
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: body
-          });
-
-  # ==========================================
-  # 2. DEPENDENCY MONITORING & UPDATES
-  # ==========================================
   dependency-monitor:
-    name: "📦 Dependency Security Monitor" 
+    name: "Dependency Security Monitor" 
     runs-on: ubuntu-latest
     needs: flutter-security
     
     steps:
-    - name: "📁 Checkout Repository"
+    - name: "Checkout Repository"
       uses: actions/checkout@v4
 
-    - name: "🔧 Setup Flutter"
+    - name: "Setup Flutter"
       uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
 
-    - name: "🔍 Check for Outdated Dependencies"
+    - name: "Check for Outdated Dependencies"
       run: |
         cd frontend
-        echo "📦 Checking for outdated dependencies..."
-        
+        echo "Checking for outdated dependencies..."
         flutter pub outdated --json > outdated.json 2>/dev/null || echo "{}" > outdated.json
-        
-        # Create dependency update report
         cat > dependency_report.md << EOF
-# 📦 Dependency Update Report
-Generated: $(date)
+        # Dependency Update Report
+        Generated: $(date)
 
-## Current Status
-EOF
-        
-        # Count outdated packages
+        ## Current Status
+        EOF
         outdated_count=$(cat outdated.json | jq '.packages | length' 2>/dev/null || echo "0")
         echo "- Packages checked: $(cat pubspec.yaml | grep -c '^  [a-zA-Z]' || echo 'unknown')"
         echo "- Outdated packages: $outdated_count"
-        
         if [ "$outdated_count" -gt 0 ]; then
-          echo "⚠️ $outdated_count packages need updates"
+          echo "$outdated_count packages need updates"
           echo "- Outdated packages: $outdated_count" >> dependency_report.md
         else
-          echo "✅ All dependencies are up to date"
-          echo "- ✅ All dependencies up to date" >> dependency_report.md
+          echo "All dependencies are up to date"
+          echo "- All dependencies up to date" >> dependency_report.md
         fi
 
-    - name: "🛡️ Security Advisory Check"
+    - name: "Security Advisory Check"
       run: |
         cd frontend
-        echo "🛡️ Checking for security advisories..."
-        
-        # This would integrate with pub.dev security advisories
-        # For now, we'll check known vulnerable packages
-        
+        echo "Checking for security advisories..."
         echo "" >> dependency_report.md
-        echo "## 🛡️ Security Advisories" >> dependency_report.md
-        
-        # Check for packages with known security issues
+        echo "## Security Advisories" >> dependency_report.md
         security_issues=0
-        
-        # Example checks (extend as needed)
         if grep -q "path_provider.*2.0" pubspec.yaml; then
-          echo "- ⚠️ path_provider: Check for latest security updates" >> dependency_report.md
+          echo "- path_provider: Check for latest security updates" >> dependency_report.md
           security_issues=$((security_issues + 1))
         fi
-        
         if [ $security_issues -eq 0 ]; then
-          echo "- ✅ No known security advisories for current dependencies" >> dependency_report.md
+          echo "- No known security advisories for current dependencies" >> dependency_report.md
         fi
 
-    - name: "📤 Upload Dependency Report"
+    - name: "Upload Dependency Report"
       uses: actions/upload-artifact@v4
       with:
         name: dependency-reports
         path: frontend/dependency_report.md
 
-  # ==========================================
-  # 3. SECURITY SUMMARY & NOTIFICATIONS
-  # ==========================================
   security-summary:
-    name: "📊 Security Summary"
+    name: "Security Summary"
     runs-on: ubuntu-latest
     needs: [flutter-security, dependency-monitor]
     if: always()
     
     steps:
-    - name: "📊 Generate Security Dashboard"
+    - name: "Generate Security Dashboard"
       run: |
         score="${{ needs.flutter-security.outputs.security-score }}"
         vulns="${{ needs.flutter-security.outputs.vulnerabilities-found }}"
-        
         cat > security_dashboard.md << EOF
-# 🔒 PestControl Security Dashboard
-**Last Updated:** $(date)
+        # PestControl Security Dashboard
+        **Last Updated:** $(date)
 
-## 🎯 Overall Security Status
-- **Security Score:** ${score:-0}/100
-- **Vulnerabilities:** ${vulns:-0}
-- **Status:** $(if [ "${score:-0}" -ge 70 ]; then echo "✅ SECURE"; else echo "⚠️ NEEDS ATTENTION"; fi)
+        ## Overall Security Status
+        - **Security Score:** ${score:-0}/100
+        - **Vulnerabilities:** ${vulns:-0}
+        - **Status:** $(if [ "${score:-0}" -ge 70 ]; then echo "SECURE"; else echo "NEEDS ATTENTION"; fi)
 
-## 📈 Trend Analysis
-- Previous Score: [Track over time]
-- Improvement: [Calculate from history]
+        ## Trend Analysis
+        - Previous Score: [Track over time]
+        - Improvement: [Calculate from history]
 
-## 🎯 Next Actions
-1. Address any critical vulnerabilities
-2. Update outdated dependencies
-3. Review security recommendations
+        ## Next Actions
+        1. Address any critical vulnerabilities
+        2. Update outdated dependencies
+        3. Review security recommendations
 
----
-*Automated Security Monitoring for PestControl*
-EOF
-        
-        echo "📊 Security Dashboard Generated"
+        ---
+        *Automated Security Monitoring for PestControl*
+        EOF
+        echo "Security Dashboard Generated"
         cat security_dashboard.md
 
-    - name: "📤 Upload Security Dashboard"
+    - name: "Upload Security Dashboard"
       uses: actions/upload-artifact@v4
       with:
         name: security-dashboard
         path: security_dashboard.md
 
-    - name: "🔔 Security Alert (High Priority)"
+    - name: "Security Alert"
       if: needs.flutter-security.outputs.security-score < 50
       run: |
-        echo "🚨 SECURITY ALERT: Score below 50!"
+        echo "SECURITY ALERT: Score below 50!"
         echo "Immediate security review required for PestControl application"
-        # Here you could add Slack/email notifications
