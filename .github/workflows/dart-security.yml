@@ -41,22 +41,37 @@ jobs:
         echo ""
         echo "Pubspec.yaml exists:"
         test -f frontend/pubspec.yaml && echo "✅ Found pubspec.yaml" || echo "❌ pubspec.yaml not found"
+        echo ""
+        echo "📋 Checking for native dependencies that might cause issues:"
+        cd frontend
+        echo "Native plugins in pubspec.yaml:"
+        grep -E "(connectivity_plus|path_provider|shared_preferences|url_launcher|sqflite)" pubspec.yaml || echo "No problematic native plugins found"
 
     - name: Get dependencies
       run: |
         cd frontend
         echo "📦 Installing Flutter Web dependencies..."
+        echo "⚠️ Note: Ignoring Android embedding warnings for web-only app"
         
-        # For web-only apps, we can ignore platform-specific warnings
+        # Force continue even with exit code 1
+        set +e  # Don't exit on error
         flutter config --enable-web
-        flutter pub get --verbose 2>&1 | tee pub_get_output.log || true
+        flutter pub get --verbose > pub_get_output.log 2>&1
+        exit_code=$?
+        set -e  # Re-enable exit on error
         
-        # Check if pubspec.lock was created (success indicator)
+        echo "📋 Pub get finished with exit code: $exit_code"
+        
+        # Always check for pubspec.lock as success indicator
         if [ -f "pubspec.lock" ]; then
-          echo "✅ Dependencies installed successfully for Flutter Web"
+          echo "✅ Dependencies resolved successfully (pubspec.lock exists)"
           echo "🌐 Web support enabled"
+          echo "📊 Total packages: $(grep -c 'name:' pubspec.lock)"
         else
-          echo "⚠️ Dependencies installation had issues, but continuing..."
+          echo "❌ No pubspec.lock found - dependencies not resolved"
+          echo "📋 Last 10 lines of output:"
+          tail -10 pub_get_output.log
+          exit 1
         fi
 
     - name: 1. Dart Static Analysis
