@@ -3,6 +3,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const https = require('https');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit'); // 🔒 NUEVO: Rate limiting
 const config = require('./config');
 const db = require('./db');
 const path = require('path');
@@ -151,6 +152,26 @@ const Logger = {
     } else {
       originalConsole.info(`📡 API: ${method} ${path}`, { origin, timestamp: new Date().toISOString() });
     }
+  },
+
+  // 🔒 NUEVO: Logger para rate limiting
+  rateLimitExceeded: (req, limitType) => {
+    const clientIP = req.headers['x-forwarded-for'] || 
+                     req.headers['x-real-ip'] || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress ||
+                     'unknown';
+    
+    if (isProduction) {
+      originalConsole.warn(`🚫 RATE_LIMIT: ${limitType} [IP_BLOCKED]`);
+    } else {
+      originalConsole.warn(`🚫 RATE_LIMIT: ${limitType}`, {
+        ip: clientIP,
+        path: req.path,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 };
 
@@ -159,6 +180,99 @@ const app = express();
 // Compartir el pool y db
 app.set('pool', db.pool);
 app.set('db', db);
+
+// ==========================================
+// 🔒 RATE LIMITING CONFIGURATION
+// ==========================================
+
+// Rate Limiter General para todas las rutas
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: isProduction ? 100 : 200, // Más permisivo en desarrollo
+  message: {
+    success: false,
+    message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo en 15 minutos.',
+    error: 'RATE_LIMIT_EXCEEDED'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    Logger.rateLimitExceeded(req, 'GENERAL');
+    res.status(429).json({
+      success: false,
+      message: 'Demasiadas solicitudes. Intenta de nuevo más tarde.',
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000),
+      resetTime: new Date(req.rateLimit.resetTime).toISOString()
+    });
+  },
+  skip: (req) => {
+    // Permitir más libertad en desarrollo
+    return isDevelopment && (req.ip === '::1' || req.ip === '127.0.0.1');
+  }
+});
+
+// Rate Limiter ESTRICTO para autenticación
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: isProduction ? 5 : 20, // Muy estricto en producción
+  skipSuccessfulRequests: true,
+  message: {
+    success: false,
+    message: 'Demasiados intentos de login. Cuenta bloqueada por 15 minutos.',
+    error: 'AUTH_RATE_LIMIT_EXCEEDED'
+  },
+  handler: (req, res) => {
+    Logger.rateLimitExceeded(req, 'AUTH');
+    Logger.security('Múltiples intentos de login fallidos', {
+      username: req.body?.username || 'unknown',
+      ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress
+    });
+    res.status(429).json({
+      success: false,
+      message: 'Demasiados intentos de login. Cuenta bloqueada temporalmente.',
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000),
+      blockedUntil: new Date(req.rateLimit.resetTime).toISOString()
+    });
+  }
+});
+
+// Rate Limiter para APIs de base de datos
+const dbApiLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutos
+  max: isProduction ? 50 : 100,
+  message: {
+    success: false,
+    message: 'Límite de API excedido. Intenta de nuevo en 10 minutos.',
+    error: 'API_RATE_LIMIT_EXCEEDED'
+  },
+  handler: (req, res) => {
+    Logger.rateLimitExceeded(req, 'DB_API');
+    res.status(429).json({
+      success: false,
+      message: 'Límite de consultas a la base de datos excedido.',
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000)
+    });
+  }
+});
+
+// Rate Limiter para configuración y diagnóstico
+const configLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  max: isProduction ? 20 : 50,
+  message: {
+    success: false,
+    message: 'Acceso a configuración limitado. Intenta de nuevo en 5 minutos.',
+    error: 'CONFIG_RATE_LIMIT_EXCEEDED'
+  },
+  handler: (req, res) => {
+    Logger.rateLimitExceeded(req, 'CONFIG');
+    res.status(429).json({
+      success: false,
+      message: 'Límite de acceso a configuración excedido.',
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000)
+    });
+  }
+});
 
 // ===== CORS CONFIGURATION =====
 const allowedOrigins = [
@@ -233,6 +347,10 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
+// ===== APLICAR RATE LIMITERS =====
+// 🔒 Rate limiter general ANTES de otros middlewares
+app.use(generalLimiter);
+
 // ===== MIDDLEWARE ADICIONAL =====
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -260,6 +378,12 @@ app.use((req, res, next) => {
                    'unknown';
   
   Logger.api(req.method, req.path, req.headers.origin);
+  
+  // 🔒 NUEVO: Log rate limit info si está disponible
+  if (req.rateLimit && !isProduction) {
+    console.debug(`Rate Limit Info: ${req.rateLimit.remaining}/${req.rateLimit.limit} remaining for ${clientIP}`);
+  }
+  
   next();
 });
 
@@ -333,15 +457,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Configurar rutas
-app.use('/api/usuarios', usuariosRoutes);
-app.use('/api/roles', rolesRoutes);
-app.use('/api/variedades', variedadesRoutes);
-app.use('/api/unidadesCultivo', unidadesCultivoRoutes);
-app.use('/api/plagas', plagasRoutes);
-app.use('/api/nivelesinfestacion', nivelesInfestacionRoutes);
-app.use('/api/lotes', lotesRoutes);
-app.use('/api/monitoreo', monitoreoRoutes);
+// 🔒 Configurar rutas con rate limiting específico
+app.use('/api/usuarios', dbApiLimiter, usuariosRoutes);
+app.use('/api/roles', dbApiLimiter, rolesRoutes);
+app.use('/api/variedades', dbApiLimiter, variedadesRoutes);
+app.use('/api/unidadesCultivo', dbApiLimiter, unidadesCultivoRoutes);
+app.use('/api/plagas', dbApiLimiter, plagasRoutes);
+app.use('/api/nivelesinfestacion', dbApiLimiter, nivelesInfestacionRoutes);
+app.use('/api/lotes', dbApiLimiter, lotesRoutes);
+app.use('/api/monitoreo', dbApiLimiter, monitoreoRoutes);
 
 // ===== RUTA RAÍZ =====
 app.get('/', (req, res) => {
@@ -381,13 +505,19 @@ app.get('/', (req, res) => {
       corsInfo: {
         allowedOrigins: allowedOrigins.length,
         currentOrigin: req.headers.origin || 'No origin'
-      }
+      },
+      // 🔒 NUEVO: Rate limit info
+      rateLimitInfo: req.rateLimit ? {
+        remaining: req.rateLimit.remaining,
+        total: req.rateLimit.limit,
+        resetTime: new Date(req.rateLimit.resetTime).toISOString()
+      } : null
     })
   });
 });
 
-// ===== RUTA DE LOGIN SEGURA =====
-app.post('/api/auth/login', async (req, res) => {
+// ===== RUTA DE LOGIN SEGURA CON RATE LIMITING =====
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body;
   
   try {
@@ -477,8 +607,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// ===== RUTAS DE CONFIGURACIÓN =====
-app.get('/api/config', (req, res) => {
+// ===== RUTAS DE CONFIGURACIÓN CON RATE LIMITING =====
+app.get('/api/config', configLimiter, (req, res) => {
   res.json({
     success: true,
     message: 'Configuración del servidor',
@@ -498,7 +628,7 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.get('/api/system/status', (req, res) => {
+app.get('/api/system/status', configLimiter, (req, res) => {
   res.json({
     success: true,
     status: 'online',
@@ -556,8 +686,8 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ===== RUTA DE DIAGNÓSTICO =====
-app.get('/api/diagnostico', async (req, res) => {
+// ===== RUTA DE DIAGNÓSTICO CON RATE LIMITING =====
+app.get('/api/diagnostico', configLimiter, async (req, res) => {
   try {
     const startTime = Date.now();
     const dbResult = await db.query('SELECT NOW() as db_time, version() as db_version');
@@ -616,10 +746,16 @@ function formatUptime(seconds) {
 
 // ===== MANEJO DE ERRORES =====
 app.use((err, req, res, next) => {
-  Logger.critical('Error no controlado', err.message);
-  res.status(500).json({
+  // 🔒 NUEVO: Log específico si es error de rate limiting
+  if (err.status === 429 || err.type === 'rate_limit') {
+    Logger.rateLimitExceeded(req, 'MIDDLEWARE_ERROR');
+  } else {
+    Logger.critical('Error no controlado', err.message);
+  }
+  
+  res.status(err.status || 500).json({
     success: false,
-    message: 'Error interno del servidor',
+    message: err.status === 429 ? 'Demasiadas solicitudes' : 'Error interno del servidor',
     error: isDevelopment ? err.message : 'Contacta al administrador',
     timestamp: new Date().toISOString()
   });
@@ -659,6 +795,13 @@ const server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0'
   Logger.startup(`Puerto: ${config.port}`);
   Logger.startup(`Entorno: ${config.environment}`);
   Logger.startup(`Versión: ${config.version}`);
+  
+  // 🔒 NUEVO: Log de configuración de rate limiting
+  Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
+  Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
+  Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
+  Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
+  Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
   
   if (!isProduction) {
     Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
