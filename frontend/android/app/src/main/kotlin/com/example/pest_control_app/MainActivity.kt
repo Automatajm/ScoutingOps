@@ -1,4 +1,4 @@
-package com.example.pest_control_app
+package com.example.pestcontrol
 
 import io.flutter.embedding.android.FlutterActivity
 

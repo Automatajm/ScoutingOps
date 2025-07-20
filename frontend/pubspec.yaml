@@ -1,7 +1,7 @@
 # ===== PUBSPEC.YAML CORREGIDO =====
 # REMOVER mobile_scanner que está causando conflicto
 
-name: pest_control_app
+name: pestcontrol
 description: App web para control de plagas - Costa Analytics (Móvil + PC)
 publish_to: "none"
 version: 1.0.0+1

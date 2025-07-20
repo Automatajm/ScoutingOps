@@ -85,8 +85,8 @@ const config = {
   // SSL/TLS (NUEVO)
   ssl: {
     enabled: process.env.SSL_ENABLED === 'true',
-    certPath: process.env.SSL_CERT_PATH || 'C:/Users/owner/Desktop/pest_control_app/backend/certs/cert.pem',
-    keyPath: process.env.SSL_KEY_PATH || 'C:/Users/owner/Desktop/pest_control_app/backend/certs/key.pem'
+    certPath: process.env.SSL_CERT_PATH || 'C:/Users/owner/Desktop/pestcontrol/backend/certs/cert.pem',
+    keyPath: process.env.SSL_KEY_PATH || 'C:/Users/owner/Desktop/pestcontrol/backend/certs/key.pem'
   },
   
   // Timeouts (NUEVO)

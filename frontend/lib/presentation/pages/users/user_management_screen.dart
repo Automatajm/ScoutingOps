@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart'; // Importar intl para formateo de fechas
-import 'package:pest_control_app/presentation/pages/auth/configuration_screen.dart';
+import 'package:pestcontrol/presentation/pages/auth/configuration_screen.dart';
 import '../../../models/user_model.dart';
 import '../../../services/user_service.dart';
 import '../../../core/config/flavor_config.dart'; // Importar ApiConfig
