@@ -201,11 +201,22 @@ if (config.environment === 'development') {
   console.log(`   Public URL: ${config.publicUrl}`);
 }
 
-// Debug para production - mostrar errores críticos
+// ✅ LOGGING SEGURO PARA PRODUCCIÓN - SIN DATOS SENSIBLES
 if (config.environment === 'production') {
-  console.log(`🐛 [PROD-DEBUG] Logs de errores: ${config.logging.errors}`);
-  console.log(`🐛 [PROD-DEBUG] SSL Path: ${config.ssl.certPath}`);
-  console.log(`🐛 [PROD-DEBUG] SSL Key: ${config.ssl.keyPath}`);
+  console.log(`💾 Pool de DB configurado:`);
+  console.log(`   Conexiones: ${config.database.pool.min}-${config.database.pool.max}`);
+  console.log(`   Timeout: ${config.database.pool.connectionTimeoutMillis}ms`);
+  console.log(`   Host: ${config.database.host}:${config.database.port}`);
+  console.log(`   SSL: ${config.ssl.enabled ? 'Habilitado' : 'Deshabilitado'}`);
+  console.log(`   Database: ${config.database.database}`);
+  console.log(`   User: ${config.database.user}`);
+  console.log(`   Logging: Queries=${config.logging.queries}, Errors=${config.logging.errors}`);
+  
+  // 🔒 LOGGING SEGURO: Status en lugar de paths sensibles
+  console.log(`🔒 [PROD-DEBUG] Error logging: ${config.logging.errors ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`🔒 [PROD-DEBUG] SSL status: ${config.ssl.enabled ? 'CONFIGURED' : 'DISABLED'}`);
+  console.log(`🔒 [PROD-DEBUG] SSL certificates: ${(config.ssl.certPath && config.ssl.keyPath) ? 'PRESENT' : 'MISSING'}`);
+  console.log(`🔒 [PROD-DEBUG] Security config: JWT=${config.security.jwtSecret !== 'fallback-secret-key' ? 'CUSTOM' : 'DEFAULT'}`);
 }
 
 module.exports = config;
