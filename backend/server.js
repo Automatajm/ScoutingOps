@@ -515,7 +515,15 @@ app.use((req, res, next) => {
       // Detectar ataques de subdomain takeover de forma segura
       if (hostname && hostname.endsWith('.github.io')) {
         // Verificar que sea exactamente nuestro dominio permitido
-        const allowedGithubDomains = allowedOriginsStatic.filter(o => o.includes('.github.io'));
+        const allowedGithubDomains = allowedOriginsStatic.filter(o => {
+          try {
+            const parsed = url.parse(o);
+            return parsed.hostname && parsed.hostname.endsWith('.github.io');
+          } catch (error) {
+            return false;
+          }
+        });
+
         if (!allowedGithubDomains.includes(origin)) {
           Logger.security('CORS: Posible subdomain takeover attempt bloqueado', {
             suspiciousOrigin: origin,
