@@ -10,7 +10,7 @@ const config = require('./config');
 const db = require('./db');
 const path = require('path');
 
-// ===== OVERRIDE GLOBAL DE CONSOLE SEGÚN ENTORNO =====
+// ===== OVERRIDE GLOBAL DE CONSOLE SEGÚN ENTORNO (SINCRONIZADO CON FLAVOR) =====
 const originalConsole = {
   log: console.log,
   info: console.info,
@@ -39,10 +39,13 @@ const sanitizeMessage = (message) => {
     .replace(/WHERE.*=/gi, 'WHERE [CONDITION]');
 };
 
-// Detectar entorno
-const isDevelopment = process.env.ENVIRONMENT === 'development';
-const isStaging = process.env.ENVIRONMENT === 'staging';
-const isProduction = process.env.ENVIRONMENT === 'production';
+// ✅ DETECTAR ENTORNO DESDE CONFIG.JS (SINCRONIZADO CON FLAVOR)
+const isDevelopment = config.flavor === 'development';
+const isStaging = config.flavor === 'staging';
+const isProduction = config.flavor === 'production';
+
+console.log(`🎯 Server.js detectó FLAVOR: ${config.flavor}`);
+console.log(`🔍 Configuración de logs: development=${isDevelopment}, staging=${isStaging}, production=${isProduction}`);
 
 if (isProduction) {
   // 🚫 PRODUCCIÓN: Solo errores críticos, sin datos sensibles
@@ -141,7 +144,7 @@ const Logger = {
 
   database: (action, details = null) => {
     if (isProduction) {
-      originalConsole.info(`💾 DB: [QUERY_EXECUTED]`);
+      // En producción no logear actividad de DB por seguridad
     } else {
       originalConsole.info(`💾 DB: ${action}`, details);
     }
@@ -149,9 +152,12 @@ const Logger = {
 
   api: (method, path, origin = null) => {
     if (isProduction) {
-      // Solo log básico sin detalles
-      originalConsole.info(`📡 API: ${method} [ENDPOINT]`);
+      // En producción no logear cada API call por seguridad y performance
+    } else if (isStaging) {
+      // En staging solo método, sin detalles
+      originalConsole.info(`📡 [STAGING] API: ${method}`);
     } else {
+      // Solo en development: log completo
       originalConsole.info(`📡 API: ${method} ${path}`, { origin, timestamp: new Date().toISOString() });
     }
   },
@@ -183,13 +189,13 @@ app.set('pool', db.pool);
 app.set('db', db);
 
 // ==========================================
-// 🔒 RATE LIMITING CONFIGURATION
+// 🔒 RATE LIMITING CONFIGURATION (SINCRONIZADO CON FLAVOR)
 // ==========================================
 
 // Rate Limiter General para todas las rutas
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: isProduction ? 100 : 200, // Más permisivo en desarrollo
+  max: config.rateLimit.maxRequests, // Usar config basado en FLAVOR
   message: {
     success: false,
     message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo en 15 minutos.',
@@ -215,7 +221,7 @@ const generalLimiter = rateLimit({
 // Rate Limiter ESTRICTO para autenticación
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: isProduction ? 5 : 20, // Muy estricto en producción
+  max: config.rateLimit.authMaxRequests, // Usar config basado en FLAVOR
   skipSuccessfulRequests: true,
   message: {
     success: false,
@@ -240,7 +246,7 @@ const authLimiter = rateLimit({
 // Rate Limiter para APIs de base de datos
 const dbApiLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutos
-  max: isProduction ? 50 : 100,
+  max: isProduction ? 50 : (isStaging ? 75 : 100),
   message: {
     success: false,
     message: 'Límite de API excedido. Intenta de nuevo en 10 minutos.',
@@ -259,7 +265,7 @@ const dbApiLimiter = rateLimit({
 // Rate Limiter para configuración y diagnóstico
 const configLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutos
-  max: isProduction ? 20 : 50,
+  max: isProduction ? 20 : (isStaging ? 35 : 50),
   message: {
     success: false,
     message: 'Acceso a configuración limitado. Intenta de nuevo en 5 minutos.',
@@ -275,28 +281,9 @@ const configLimiter = rateLimit({
   }
 });
 
-// ===== CORS CONFIGURATION ULTRA SEGURA =====
-// 🔒 WHITELIST ESTÁTICA - Lista exacta de orígenes permitidos
-const allowedOriginsStatic = [
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
-  'https://localhost:8080',
-  'https://127.0.0.1:8080',
-  'http://172.24.16.1:8080',
-  'https://172.24.16.1:8080',
-  'http://10.0.0.19:8080',
-  'https://10.0.0.19:8080',
-  'http://192.168.1.100:8080',
-  'http://192.168.0.100:8080',
-  'https://192.168.1.100:8080',
-  'https://192.168.0.100:8080',
-  'https://165.227.219.173:8080',
-  'https://www.autoinfoplus.com',
-  'https://autoinfoplus.com',
-  // Agregar soporte para tu nueva IP WiFi
-  'http://192.168.10.166:8080',
-  'https://192.168.10.166:8080'
-];
+// ===== CORS CONFIGURATION BASADA EN FLAVOR =====
+// Usar configuración de CORS del config.js
+const allowedOriginsStatic = Array.isArray(config.cors.origins) ? config.cors.origins : [config.cors.origins];
 
 // 🔒 PATRONES REGEX OPTIMIZADOS (sin vulnerabilidades ReDoS)
 const allowedOriginPatterns = [
@@ -327,8 +314,13 @@ const isOriginAllowed = (requestOrigin) => {
     return false;
   }
   
+  // En desarrollo, permitir cualquier origin para facilitar desarrollo
+  if (isDevelopment) {
+    return true;
+  }
+  
   // 1. Verificar lista estática (más rápido y seguro)
-  if (allowedOriginsStatic.includes(requestOrigin)) {
+  if (allowedOriginsStatic.includes(requestOrigin) || allowedOriginsStatic.includes('*')) {
     return true;
   }
   
@@ -367,6 +359,11 @@ const isSecureDomain = (originUrl) => {
     
     if (!hostname) return false;
     
+    // En desarrollo, ser más permisivo
+    if (isDevelopment) {
+      return true;
+    }
+    
     // Lista exacta de hostnames permitidos
     const allowedHosts = [
       'localhost',
@@ -375,10 +372,14 @@ const isSecureDomain = (originUrl) => {
       '10.0.0.19',
       '192.168.1.100',
       '192.168.0.100',
-      '192.168.10.166', // Nueva IP WiFi
+      '192.168.10.166',
       '165.227.219.173',
       'www.autoinfoplus.com',
-      'autoinfoplus.com'
+      'autoinfoplus.com',
+      'app.pestcontrol.com',
+      'staging.pestcontrol.com',
+      'api.pestcontrol.com',
+      'staging-api.pestcontrol.com'
     ];
     
     // Verificar hosts exactos
@@ -393,7 +394,8 @@ const isSecureDomain = (originUrl) => {
       '.ngrok.app',
       '.loca.lt',
       '.github.io',
-      '.githubusercontent.com'
+      '.githubusercontent.com',
+      '.pestcontrol.com'
     ];
     
     // Verificación segura de subdominio (endsWith en lugar de includes)
@@ -423,7 +425,7 @@ app.use(cors({
       }
     }
   },
-  credentials: true,
+  credentials: config.cors.credentials,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
   allowedHeaders: [
     'Content-Type', 
@@ -451,15 +453,17 @@ app.use((req, res, next) => {
   // ✅ SOLUCIÓN CORS: Solo establecer headers para orígenes estáticamente validados
   if (requestOrigin && isOriginAllowed(requestOrigin) && isSecureDomain(requestOrigin)) {
     // 🔒 CRÍTICO: Solo usar orígenes de la whitelist estática
-    if (allowedOriginsStatic.includes(requestOrigin)) {
+    if (allowedOriginsStatic.includes(requestOrigin) || allowedOriginsStatic.includes('*') || isDevelopment) {
       // ✅ ULTRA SEGURO: Origin estático de la whitelist
       res.header('Access-Control-Allow-Origin', requestOrigin);
       res.header('Access-Control-Allow-Credentials', 'true');
     } else {
       // Para patrones regex: NO usar origin dinámico, usar un valor seguro
-      Logger.security('CORS: Regex pattern matched but not setting dynamic origin', {
-        origin: requestOrigin
-      });
+      if (!isProduction) {
+        Logger.security('CORS: Regex pattern matched but not setting dynamic origin', {
+          origin: requestOrigin
+        });
+      }
       // NO establecer headers CORS para patrones regex por seguridad
     }
   } else if (isDevelopment && !requestOrigin) {
@@ -475,7 +479,7 @@ app.use((req, res, next) => {
   
   // Preflight seguro
   if (req.method === 'OPTIONS') {
-    if (requestOrigin && allowedOriginsStatic.includes(requestOrigin)) {
+    if (requestOrigin && (allowedOriginsStatic.includes(requestOrigin) || isDevelopment)) {
       res.status(204).send();
     } else {
       res.status(403).json({
@@ -495,7 +499,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   
   // Bloquear origin null completamente
-  if (origin === 'null') {
+  if (origin === 'null' && !isDevelopment) {
     Logger.security('CORS: Origin null bloqueado', {
       ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
       method: req.method,
@@ -511,46 +515,13 @@ app.use((req, res, next) => {
     }
   }
   
-  // 🔒 VERIFICACIÓN SEGURA DE SUBDOMINIOS (sin .includes vulnerable)
-  if (origin) {
-    try {
-      const parsed = url.parse(origin);
-      const hostname = parsed.hostname;
-      
-      // Detectar ataques de subdomain takeover de forma segura
-      if (hostname && hostname.endsWith('.github.io')) {
-        // ✅ CORRECCIÓN: Validación segura sin .includes()
-        const allowedGithubDomains = allowedOriginsStatic.filter(o => {
-          try {
-            const parsed = url.parse(o);
-            return parsed.hostname && parsed.hostname.endsWith('.github.io');
-          } catch (error) {
-            return false;
-          }
-        });
-
-        if (!allowedGithubDomains.includes(origin)) {
-          Logger.security('CORS: Posible subdomain takeover attempt bloqueado', {
-            suspiciousOrigin: origin,
-            hostname: hostname
-          });
-        }
-      }
-    } catch (error) {
-      Logger.security('CORS: Error parsing origin for subdomain check', {
-        origin: origin,
-        error: error.message
-      });
-    }
-  }
-  
   next();
 });
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware para log de peticiones con seguridad
+// ✅ MIDDLEWARE PARA LOG DE PETICIONES (SOLO EN DEVELOPMENT Y STAGING)
 app.use((req, res, next) => {
   const clientIP = req.headers['x-forwarded-for'] || 
                    req.headers['x-real-ip'] || 
@@ -558,10 +529,13 @@ app.use((req, res, next) => {
                    req.socket.remoteAddress ||
                    'unknown';
   
-  Logger.api(req.method, req.path, req.headers.origin);
+  // Solo logear APIs en development y staging
+  if (!isProduction) {
+    Logger.api(req.method, req.path, req.headers.origin);
+  }
   
-  // 🔒 Log rate limit info si está disponible
-  if (req.rateLimit && !isProduction) {
+  // ✅ Solo rate limit info en development
+  if (req.rateLimit && isDevelopment) {
     console.debug(`Rate Limit Info: ${req.rateLimit.remaining}/${req.rateLimit.limit} remaining for ${clientIP}`);
   }
   
@@ -577,7 +551,7 @@ app.use((req, res, next) => {
   const needsLongTimeout = longTimeoutRoutes.some(route => req.url.includes(route));
   
   if (!shouldExclude) {
-    const timeoutDuration = needsLongTimeout ? 60000 : 30000;
+    const timeoutDuration = needsLongTimeout ? 60000 : (config.timeouts ? config.timeouts.request : 30000);
     
     const timeout = setTimeout(() => {
       if (!res.headersSent) {
@@ -656,20 +630,23 @@ app.get('/', (req, res) => {
                    req.socket.remoteAddress ||
                    'unknown';
 
-  // Pool status con seguridad
-  const poolStatus = {
-    total: db.pool ? db.pool.totalCount : 0,
-    idle: db.pool ? db.pool.idleCount : 0,
-    waiting: db.pool ? db.pool.waitingCount : 0,
-    pending: db.pool ? db.pool.pendingCount : 0
-  };
+  // ✅ Pool status solo en development (no en production por seguridad)
+  if (!isProduction) {
+    const poolStatus = {
+      total: db.pool ? db.pool.totalCount : 0,
+      idle: db.pool ? db.pool.idleCount : 0,
+      waiting: db.pool ? db.pool.waitingCount : 0,
+      pending: db.pool ? db.pool.pendingCount : 0
+    };
 
-  console.log(`Estado del pool - total: ${poolStatus.total}, inactivos: ${poolStatus.idle}, en espera: ${poolStatus.waiting}, operaciones pendientes: ${poolStatus.pending}`);
+    console.log(`Estado del pool - total: ${poolStatus.total}, inactivos: ${poolStatus.idle}, en espera: ${poolStatus.waiting}, operaciones pendientes: ${poolStatus.pending}`);
+  }
 
   res.json({ 
     success: true,
     message: 'API Pest Control funcionando correctamente',
     environment: config.environment,
+    flavor: config.flavor,
     version: config.version,
     timestamp: new Date().toISOString(),
     // En producción, información limitada
@@ -769,6 +746,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       config: {
         version: config.version,
         environment: config.environment,
+        flavor: config.flavor,
         // En producción, información limitada
         ...(isProduction ? {} : {
           apiUrl: config.apiUrl,
@@ -794,15 +772,21 @@ app.get('/api/config', configLimiter, (req, res) => {
     message: 'Configuración del servidor',
     version: config.version,
     environment: config.environment,
+    flavor: config.flavor,
     timestamp: new Date().toISOString(),
     // En producción, información limitada
     ...(isProduction ? {} : {
       apiUrl: config.apiUrl,
-      baseUrl: config.apiUrl.replace('/api', ''),
+      baseUrl: config.baseUrl,
       urls: config.urls,
       systemInfo: config.system,
       corsInfo: {
-        allowedOrigins: allowedOriginsStatic.length
+        allowedOrigins: allowedOriginsStatic.length,
+        origins: allowedOriginsStatic
+      },
+      rateLimit: {
+        general: config.rateLimit.maxRequests,
+        auth: config.rateLimit.authMaxRequests
       }
     })
   });
@@ -815,11 +799,12 @@ app.get('/api/system/status', configLimiter, (req, res) => {
     message: 'Sistema funcionando correctamente',
     serverTime: new Date().toISOString(),
     environment: config.environment,
+    flavor: config.flavor,
     version: config.version,
     // En producción, información limitada
     ...(isProduction ? {} : {
       apiUrl: config.apiUrl,
-      baseUrl: config.apiUrl.replace('/api', ''),
+      baseUrl: config.baseUrl,
       urls: config.urls,
       systemInfo: config.system,
       serverStatus: {
@@ -848,6 +833,8 @@ app.get('/api/health', async (req, res) => {
       info: {
         serverTime: new Date().toISOString(),
         uptime: Math.floor(process.uptime()),
+        environment: config.environment,
+        flavor: config.flavor,
         // En producción, información limitada
         ...(isProduction ? {} : {
           dbResponseTime: dbTest.rows[0]?.current_time,
@@ -883,6 +870,7 @@ app.get('/api/diagnostico', configLimiter, async (req, res) => {
         uptime: Math.floor(process.uptime()),
         uptimeFormatted: formatUptime(process.uptime()),
         environment: config.environment,
+        flavor: config.flavor,
         version: config.version,
         // En producción, información limitada
         ...(isProduction ? {} : {
@@ -971,7 +959,7 @@ const sslCertPath = path.join(__dirname, '..', 'cert.pem');
 const sslKeyExists = fs.existsSync(sslKeyPath);
 const sslCertExists = fs.existsSync(sslCertPath);
 
-if (sslKeyExists && sslCertExists) {
+if ((sslKeyExists && sslCertExists) || config.ssl.enabled) {
   // ✅ HTTPS con certificados
   try {
     const sslOptions = {
@@ -986,21 +974,22 @@ if (sslKeyExists && sslCertExists) {
       Logger.startup(`Host: ${config.host}`);
       Logger.startup(`Puerto: ${config.port}`);
       Logger.startup(`Entorno: ${config.environment}`);
+      Logger.startup(`Flavor: ${config.flavor}`);
       Logger.startup(`Versión: ${config.version}`);
       
       // 🔒 Log de configuración de seguridad
-      Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
-      Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
-      Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
-      Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
-      Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
-      Logger.startup(`CORS Security: Ultra-secure static whitelist with ${allowedOriginsStatic.length} exact origins`);
+      Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
+      Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min`);
+      Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min`);
+      Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : (isStaging ? '75' : '100')} requests per 10min`);
+      Logger.startup(`Config Rate Limit: ${isProduction ? '20' : (isStaging ? '35' : '50')} requests per 5min`);
+      Logger.startup(`CORS Security: ${config.cors.origins.includes('*') ? 'Wildcard (dev only)' : 'Whitelist'} with ${allowedOriginsStatic.length} origins`);
       Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
       
       if (!isProduction) {
         Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
         Logger.startup(`URL Red HTTPS: https://192.168.10.166:${config.port}`);
-        Logger.startup(`Sistema: ${config.system.platform} - ${config.system.hostname}`);
+        Logger.startup(`Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
       }
       
       // Probar conexión a la base de datos
@@ -1034,15 +1023,16 @@ function initHttpServer() {
     Logger.startup(`Host: ${config.host}`);
     Logger.startup(`Puerto: ${config.port}`);
     Logger.startup(`Entorno: ${config.environment}`);
+    Logger.startup(`Flavor: ${config.flavor}`);
     Logger.startup(`Versión: ${config.version}`);
     
     // 🔒 Log de configuración de seguridad
-    Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
-    Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
-    Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
-    Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
-    Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
-    Logger.startup(`CORS Security: Ultra-secure static whitelist with ${allowedOriginsStatic.length} exact origins`);
+    Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
+    Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min`);
+    Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min`);
+    Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : (isStaging ? '75' : '100')} requests per 10min`);
+    Logger.startup(`Config Rate Limit: ${isProduction ? '20' : (isStaging ? '35' : '50')} requests per 5min`);
+    Logger.startup(`CORS Security: ${config.cors.origins.includes('*') ? 'Wildcard (dev only)' : 'Whitelist'} with ${allowedOriginsStatic.length} origins`);
     Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
     
     if (!isProduction) {

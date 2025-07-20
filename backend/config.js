@@ -1,6 +1,164 @@
-// ===== config.js ACTUALIZADO =====
-require('dotenv').config();
+// ===== config.js CON PRIORIDAD A .env MANUAL =====
+const path = require('path');
+const fs = require('fs');
 const os = require('os');
+
+// ===== FUNCIÓN PARA DETECTAR FLAVOR DESDE .env ACTUAL =====
+function detectFlavorFromCurrentEnv() {
+  try {
+    const envPath = path.resolve(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      
+      // Buscar FLAVOR en el archivo .env actual
+      const flavorMatch = envContent.match(/^FLAVOR=(.+)$/m);
+      if (flavorMatch) {
+        const flavor = flavorMatch[1].trim().toLowerCase();
+        console.log(`🎯 FLAVOR detectado desde .env actual: ${flavor}`);
+        return flavor;
+      }
+    }
+  } catch (error) {
+    console.log(`⚠️ Error leyendo .env actual: ${error.message}`);
+  }
+  return null;
+}
+
+// ===== FUNCIÓN PARA AUTO-DETECTAR FLAVOR DEL FRONTEND (FALLBACK) =====
+function autoDetectFlavorFromFrontend() {
+  try {
+    // Buscar archivos de build del frontend que indiquen el flavor
+    const frontendBuildPaths = [
+      '../frontend/build/web/assets/.env',
+      '../frontend/build/web/main.dart.js',
+      '../frontend/.flutter-plugins',
+      '../frontend/build/web/flutter_service_worker.js'
+    ];
+    
+    for (const buildPath of frontendBuildPaths) {
+      const fullPath = path.resolve(__dirname, buildPath);
+      if (fs.existsSync(fullPath)) {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        
+        // Buscar indicadores de flavor en el contenido
+        if (content.includes('production') || content.includes('PRODUCTION')) {
+          console.log(`🔍 Flavor detectado desde frontend build: production`);
+          return 'production';
+        }
+        if (content.includes('staging') || content.includes('STAGING')) {
+          console.log(`🔍 Flavor detectado desde frontend build: staging`);
+          return 'staging';
+        }
+      }
+    }
+  } catch (error) {
+    // Silencioso, continuar con otras detecciones
+  }
+  
+  return null;
+}
+
+// ===== FUNCIÓN PARA DETECTAR FLAVOR CON PRIORIDADES =====
+function detectFlavorWithPriority() {
+  // 🥇 PRIORIDAD 1: Variable de entorno directa (npm scripts)
+  const envFlavor = process.env.FLAVOR || process.env.NODE_ENV || process.env.ENVIRONMENT;
+  if (envFlavor && ['development', 'staging', 'production'].includes(envFlavor.toLowerCase())) {
+    console.log(`🥇 PRIORIDAD 1: FLAVOR desde variable de entorno: ${envFlavor}`);
+    return envFlavor.toLowerCase();
+  }
+  
+  // 🥈 PRIORIDAD 2: Argumentos de línea de comandos
+  const argFlavor = process.argv.find(arg => arg.startsWith('--flavor='))?.split('=')[1] ||
+                    process.argv.find(arg => arg.startsWith('--env='))?.split('=')[1];
+  if (argFlavor && ['development', 'staging', 'production'].includes(argFlavor.toLowerCase())) {
+    console.log(`🥈 PRIORIDAD 2: FLAVOR desde argumentos CLI: ${argFlavor}`);
+    return argFlavor.toLowerCase();
+  }
+  
+  // 🥉 PRIORIDAD 3: Archivo .env actual (el que copiaste manualmente)
+  const currentEnvFlavor = detectFlavorFromCurrentEnv();
+  if (currentEnvFlavor && ['development', 'staging', 'production'].includes(currentEnvFlavor)) {
+    console.log(`🥉 PRIORIDAD 3: FLAVOR desde .env actual: ${currentEnvFlavor}`);
+    return currentEnvFlavor;
+  }
+  
+  // 🔄 PRIORIDAD 4: Auto-detección desde frontend (fallback)
+  const frontendFlavor = autoDetectFlavorFromFrontend();
+  if (frontendFlavor && ['development', 'staging', 'production'].includes(frontendFlavor)) {
+    console.log(`🔄 PRIORIDAD 4: FLAVOR desde frontend build: ${frontendFlavor}`);
+    return frontendFlavor;
+  }
+  
+  // 🎯 DEFAULT: development
+  console.log(`🎯 DEFAULT: FLAVOR por defecto: development`);
+  return 'development';
+}
+
+// ===== CARGAR .env SEGÚN FLAVOR DETECTADO =====
+function loadEnvironmentConfig() {
+  // 1. Detectar flavor con sistema de prioridades
+  const detectedFlavor = detectFlavorWithPriority();
+  
+  // 2. Determinar archivo .env original (para verificación)
+  let originalEnvFile;
+  switch (detectedFlavor) {
+    case 'production':
+      originalEnvFile = '.env.production';
+      break;
+    case 'staging':
+      originalEnvFile = '.env.staging';
+      break;
+    case 'development':
+    default:
+      originalEnvFile = '.env.development';
+      break;
+  }
+
+  // 3. Cargar archivo .env actual (ya copiado por npm script)
+  const currentEnvPath = path.resolve(__dirname, '.env');
+  const originalEnvPath = path.resolve(__dirname, '..', originalEnvFile);
+  
+  try {
+    // Cargar .env actual
+    require('dotenv').config({ path: currentEnvPath });
+    
+    console.log(`🎯 Auto-detección de entorno:`);
+    console.log(`   Flavor detectado: ${detectedFlavor}`);
+    console.log(`   Archivo original: ${originalEnvFile}`);
+    console.log(`   Archivo actual: .env`);
+    console.log(`   Ruta actual: ${currentEnvPath}`);
+    
+    // Verificar que el archivo actual existe
+    if (fs.existsSync(currentEnvPath)) {
+      console.log(`✅ Archivo .env actual cargado exitosamente`);
+      
+      // Verificar que FLAVOR del .env coincide
+      const envFlavor = process.env.FLAVOR;
+      if (envFlavor && envFlavor !== detectedFlavor) {
+        console.log(`⚠️ ADVERTENCIA: Flavor detectado (${detectedFlavor}) vs .env FLAVOR (${envFlavor})`);
+        console.log(`🔄 Usando FLAVOR del .env: ${envFlavor}`);
+        return envFlavor.toLowerCase();
+      }
+    } else {
+      console.log(`⚠️ Archivo .env actual no encontrado, cargando original`);
+      require('dotenv').config({ path: originalEnvPath });
+    }
+    
+    // Establecer FLAVOR si no está definido
+    if (!process.env.FLAVOR) {
+      process.env.FLAVOR = detectedFlavor;
+    }
+    
+  } catch (error) {
+    console.log(`❌ Error cargando archivos .env:`, error.message);
+    console.log(`📋 Usando configuración por defecto para ${detectedFlavor}`);
+  }
+
+  return detectedFlavor;
+}
+
+// ===== CARGAR CONFIGURACIÓN DE ENTORNO =====
+const currentFlavor = loadEnvironmentConfig();
 
 // ===== FUNCIÓN PARA DETECTAR IP PRINCIPAL =====
 function getMainIP() {
@@ -31,18 +189,24 @@ function getMainIP() {
   return 'localhost';
 }
 
-// ===== CONFIGURACIÓN PRINCIPAL =====
+// ===== CONFIGURACIÓN PRINCIPAL BASADA EN FLAVOR =====
 const config = {
-  // Básicos (requeridos)
-  environment: process.env.ENVIRONMENT || 'development',
+  // Básicos (usando FLAVOR como fuente principal)
+  environment: process.env.FLAVOR || currentFlavor,
+  flavor: process.env.FLAVOR || currentFlavor,
   version: process.env.VERSION || '1.0.0',
   port: parseInt(process.env.PORT) || 8000,
   host: process.env.HOST || '0.0.0.0',
   
-  // URLs
-  apiUrl: process.env.API_URL || `https://${getMainIP()}:8000/api`,
-  baseUrl: process.env.BASE_URL || `https://${getMainIP()}:8000`,
-  publicUrl: process.env.PUBLIC_URL || `https://${getMainIP()}:8080`,
+  // URLs basadas en FLAVOR
+  apiUrl: process.env.API_BASE_URL || 
+          (currentFlavor === 'production' ? process.env.PRODUCTION_API_URL : 
+           currentFlavor === 'staging' ? process.env.STAGING_API_URL :
+           process.env.LOCAL_API_URL) ||
+          `https://${getMainIP()}:${process.env.PORT || 8000}/api`,
+  
+  baseUrl: process.env.BACKEND_URL || `https://${getMainIP()}:${process.env.PORT || 8000}`,
+  publicUrl: process.env.PUBLIC_URL || `https://${getMainIP()}:${parseInt(process.env.PORT || 8000) + 80}`,
   
   // Base de datos
   database: {
@@ -52,10 +216,9 @@ const config = {
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '0824',
     
-    // Pool de conexiones (NUEVO)
     pool: {
-      max: parseInt(process.env.DB_POOL_MAX) || 10,
-      min: parseInt(process.env.DB_POOL_MIN) || 2,
+      max: parseInt(process.env.DB_POOL_MAX) || (currentFlavor === 'production' ? 20 : currentFlavor === 'staging' ? 15 : 10),
+      min: parseInt(process.env.DB_POOL_MIN) || (currentFlavor === 'production' ? 5 : currentFlavor === 'staging' ? 3 : 2),
       idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 10000,
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 5000,
       statementTimeout: parseInt(process.env.DB_STATEMENT_TIMEOUT) || 15000,
@@ -63,100 +226,81 @@ const config = {
     }
   },
   
-  // Logging (NUEVO)
+  // Logging basado en FLAVOR
   logging: {
-    queries: process.env.LOG_QUERIES === 'true',
-    errors: process.env.LOG_ERRORS !== 'false', // default true
-    requests: process.env.LOG_REQUESTS === 'true',
-    pretty: process.env.PRETTY_LOGS === 'true',
-    level: process.env.LOG_LEVEL || 'info'
+    queries: process.env.LOG_API_CALLS === 'true',
+    errors: process.env.LOG_ERRORS !== 'false',
+    requests: process.env.LOG_API_CALLS === 'true',
+    pretty: currentFlavor === 'development',
+    level: process.env.LOG_LEVEL || (currentFlavor === 'production' ? 'error' : currentFlavor === 'staging' ? 'info' : 'debug')
   },
   
-  // Seguridad (NUEVO)
+  // Seguridad basada en FLAVOR
   security: {
-    saltRounds: parseInt(process.env.SALT_ROUNDS) || 10,
-    jwtSecret: process.env.JWT_SECRET || 'fallback-secret-key',
-    tokenExpiration: process.env.TOKEN_EXPIRATION || '24h',
-    helmetEnabled: process.env.HELMET_ENABLED === 'true',
-    sessionSecure: process.env.SESSION_SECURE === 'true',
-    cookieSecure: process.env.COOKIE_SECURE === 'true'
+    saltRounds: parseInt(process.env.SALT_ROUNDS) || (currentFlavor === 'production' ? 12 : currentFlavor === 'staging' ? 11 : 10),
+    jwtSecret: process.env.JWT_SECRET || process.env.JWT_STORAGE_KEY || 'fallback-secret-key',
+    tokenExpiration: process.env.TOKEN_EXPIRATION || (currentFlavor === 'production' ? '1h' : currentFlavor === 'staging' ? '4h' : '24h'),
+    helmetEnabled: process.env.HELMET_ENABLED === 'true' || currentFlavor === 'production',
+    sessionSecure: process.env.SESSION_SECURE === 'true' || currentFlavor === 'production',
+    cookieSecure: process.env.COOKIE_SECURE === 'true' || currentFlavor === 'production'
   },
   
-  // SSL/TLS (NUEVO)
+  // SSL basado en FLAVOR
   ssl: {
-    enabled: process.env.SSL_ENABLED === 'true',
-    certPath: process.env.SSL_CERT_PATH || 'C:/Users/owner/Desktop/pestcontrol/backend/certs/cert.pem',
-    keyPath: process.env.SSL_KEY_PATH || 'C:/Users/owner/Desktop/pestcontrol/backend/certs/key.pem'
+    enabled: process.env.SSL_ENABLED === 'true' || process.env.VERIFY_SSL === 'true' || currentFlavor === 'production',
+    certPath: process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'cert.pem'),
+    keyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '..', 'key.pem'),
+    verifySSL: process.env.VERIFY_SSL === 'true',
+    allowSelfSigned: process.env.ALLOW_SELF_SIGNED_CERTS === 'true'
   },
   
-  // Timeouts (NUEVO)
-  timeouts: {
-    server: parseInt(process.env.SERVER_TIMEOUT) || 30000,
-    request: parseInt(process.env.REQUEST_TIMEOUT) || 15000
-  },
-  
-  // CORS (NUEVO)
-  cors: {
-    origins: process.env.CORS_ORIGIN ? 
-      process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()) : 
-      ['http://localhost:8080', 'https://localhost:8080'],
-    credentials: process.env.CORS_CREDENTIALS === 'true'
-  },
-  
-  // Rate Limiting (NUEVO)
+  // Rate Limiting basado en FLAVOR
   rateLimit: {
-    windowMs: (parseInt(process.env.RATE_LIMIT_WINDOW) || 15) * 60 * 1000, // minutos a ms
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+    windowMs: (parseInt(process.env.RATE_LIMIT_WINDOW) || 15) * 60 * 1000,
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 
+                 (currentFlavor === 'production' ? 100 : 
+                  currentFlavor === 'staging' ? 150 : 200),
+    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX) ||
+                     (currentFlavor === 'production' ? 5 : 
+                      currentFlavor === 'staging' ? 10 : 20)
   },
   
-  // Monitoreo (NUEVO)
-  monitoring: {
-    enabled: process.env.MONITORING_ENABLED === 'true',
-    metricsEndpoint: process.env.METRICS_ENDPOINT || '/metrics',
-    healthCheckInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL) || 30000,
-    apmEnabled: process.env.APM_ENABLED === 'true'
+  // CORS basado en FLAVOR
+  cors: {
+    origins: process.env.ALLOWED_ORIGINS ? 
+      (process.env.ALLOWED_ORIGINS === '*' ? ['*'] : process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())) :
+      (currentFlavor === 'production' ? 
+        ['https://app.pestcontrol.com'] : 
+        currentFlavor === 'staging' ?
+        ['https://staging.pestcontrol.com'] :
+        ['*']), // Wildcard solo en development
+    credentials: process.env.CORS_CREDENTIALS === 'true' || process.env.CORS_ENABLED === 'true'
   },
   
-  // Performance (NUEVO)
-  performance: {
-    gzipEnabled: process.env.GZIP_ENABLED === 'true',
-    etagEnabled: process.env.ETAG_ENABLED === 'true',
-    cacheControlMaxAge: parseInt(process.env.CACHE_CONTROL_MAX_AGE) || 0
+  // Timeouts basados en FLAVOR
+  timeouts: {
+    request: parseInt(process.env.REQUEST_TIMEOUT) || 
+             (currentFlavor === 'production' ? 20000 : 
+              currentFlavor === 'staging' ? 25000 : 30000),
+    connect: parseInt(process.env.CONNECT_TIMEOUT) || 
+             (currentFlavor === 'production' ? 5000 : 
+              currentFlavor === 'staging' ? 8000 : 10000),
+    server: parseInt(process.env.SERVER_TIMEOUT) || 30000
   },
   
-  // CDN y Assets (NUEVO)
-  assets: {
-    cdnUrl: process.env.CDN_URL || null,
-    staticAssetsUrl: process.env.STATIC_ASSETS_URL || null
-  },
-  
-  // Flutter Web (NUEVO)
-  flutter: {
-    useSkia: process.env.FLUTTER_WEB_USE_SKIA === 'true',
-    autoDetect: process.env.FLUTTER_WEB_AUTO_DETECT !== 'false',
-    renderer: process.env.FLUTTER_WEB_RENDERER || 'html',
-    cacheAssets: process.env.FLUTTER_WEB_CACHE_ASSETS === 'true'
-  },
-  
-  // Servicios Externos (NUEVO)
-  services: {
-    email: process.env.EMAIL_SERVICE_ENABLED === 'true',
-    sms: process.env.SMS_SERVICE_ENABLED === 'true',
-    pushNotifications: process.env.PUSH_NOTIFICATIONS_ENABLED === 'true'
-  },
-  
-  // Backup (NUEVO)
-  backup: {
-    enabled: process.env.DB_BACKUP_ENABLED === 'true',
-    schedule: process.env.DB_BACKUP_SCHEDULE || '0 2 * * *',
-    retentionDays: parseInt(process.env.DB_BACKUP_RETENTION_DAYS) || 7
+  // Debug basado en FLAVOR
+  debug: {
+    enabled: process.env.DEBUG_MODE === 'true' || currentFlavor === 'development',
+    analytics: process.env.ANALYTICS_ENABLED === 'true',
+    errorReporting: process.env.ERROR_REPORTING === 'true'
   },
   
   // URLs calculadas
   urls: {
-    api: process.env.API_URL || `https://${getMainIP()}:8000/api`,
-    base: process.env.BASE_URL || `https://${getMainIP()}:8000`,
-    public: process.env.PUBLIC_URL || `https://${getMainIP()}:8080`,
+    api: process.env.API_BASE_URL,
+    base: process.env.BACKEND_URL,
+    public: process.env.PUBLIC_URL,
+    websocket: process.env.WS_URL,
     local: `https://localhost:${process.env.PORT || 8000}`,
     network: `https://${getMainIP()}:${process.env.PORT || 8000}`
   },
@@ -171,9 +315,8 @@ const config = {
   }
 };
 
-// ===== VALIDACIONES SEGÚN ENTORNO =====
-if (config.environment === 'production') {
-  // Validaciones críticas para producción
+// ===== VALIDACIONES SEGÚN FLAVOR =====
+if (config.flavor === 'production') {
   if (config.security.jwtSecret === 'fallback-secret-key') {
     console.warn('⚠️ WARNING: Usando JWT secret por defecto en producción');
   }
@@ -187,36 +330,30 @@ if (config.environment === 'production') {
   }
 }
 
-// ===== LOGGING DE CONFIGURACIÓN =====
+// ===== LOGGING DE CONFIGURACIÓN SEGÚN FLAVOR =====
 console.log(`🔧 Configuración cargada:`);
+console.log(`   Flavor: ${config.flavor}`);
 console.log(`   Entorno: ${config.environment}`);
 console.log(`   Puerto: ${config.port}`);
 console.log(`   Base URL: ${config.baseUrl}`);
 console.log(`   SSL: ${config.ssl.enabled ? 'Habilitado' : 'Deshabilitado'}`);
 console.log(`   Pool DB: ${config.database.pool.min}-${config.database.pool.max} conexiones`);
+console.log(`   Debug Mode: ${config.debug.enabled ? 'Habilitado' : 'Deshabilitado'}`);
 
-if (config.environment === 'development') {
+// Solo mostrar detalles en development/staging
+if (config.flavor !== 'production') {
   console.log(`   DB Host: ${config.database.host}`);
   console.log(`   API URL: ${config.apiUrl}`);
   console.log(`   Public URL: ${config.publicUrl}`);
-}
-
-// ✅ LOGGING SEGURO PARA PRODUCCIÓN - SIN DATOS SENSIBLES
-if (config.environment === 'production') {
-  console.log(`💾 Pool de DB configurado:`);
-  console.log(`   Conexiones: ${config.database.pool.min}-${config.database.pool.max}`);
-  console.log(`   Timeout: ${config.database.pool.connectionTimeoutMillis}ms`);
-  console.log(`   Host: ${config.database.host}:${config.database.port}`);
-  console.log(`   SSL: ${config.ssl.enabled ? 'Habilitado' : 'Deshabilitado'}`);
-  console.log(`   Database: ${config.database.database}`);
-  console.log(`   User: ${config.database.user}`);
-  console.log(`   Logging: Queries=${config.logging.queries}, Errors=${config.logging.errors}`);
-  
-  // 🔒 LOGGING SEGURO: Status en lugar de paths sensibles
-  console.log(`🔒 [PROD-DEBUG] Error logging: ${config.logging.errors ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`🔒 [PROD-DEBUG] SSL status: ${config.ssl.enabled ? 'CONFIGURED' : 'DISABLED'}`);
-  console.log(`🔒 [PROD-DEBUG] SSL certificates: ${(config.ssl.certPath && config.ssl.keyPath) ? 'PRESENT' : 'MISSING'}`);
-  console.log(`🔒 [PROD-DEBUG] Security config: JWT=${config.security.jwtSecret !== 'fallback-secret-key' ? 'CUSTOM' : 'DEFAULT'}`);
+  console.log(`   WebSocket URL: ${config.urls.websocket}`);
+  console.log(`   Rate Limit: ${config.rateLimit.maxRequests} req/15min`);
+  console.log(`   Auth Limit: ${config.rateLimit.authMaxRequests} attempts/15min`);
+  console.log(`   CORS Origins: ${Array.isArray(config.cors.origins) ? config.cors.origins.join(', ') : config.cors.origins}`);
+} else {
+  // Logging seguro para producción
+  console.log(`🔒 [PROD] Error logging: ${config.logging.errors ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`🔒 [PROD] SSL status: ${config.ssl.enabled ? 'CONFIGURED' : 'DISABLED'}`);
+  console.log(`🔒 [PROD] Security level: ${config.security.jwtSecret !== 'fallback-secret-key' ? 'CUSTOM' : 'DEFAULT'}`);
 }
 
 module.exports = config;
