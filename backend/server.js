@@ -2,8 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const https = require('https');
+const http = require('http'); // NUEVO: Para HTTP fallback
 const fs = require('fs');
-const url = require('url'); // NUEVO: Para parsing seguro de URLs
+const url = require('url'); // Para parsing seguro de URLs
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const db = require('./db');
@@ -291,7 +292,10 @@ const allowedOriginsStatic = [
   'https://192.168.0.100:8080',
   'https://165.227.219.173:8080',
   'https://www.autoinfoplus.com',
-  'https://autoinfoplus.com'
+  'https://autoinfoplus.com',
+  // Agregar soporte para tu nueva IP WiFi
+  'http://192.168.10.166:8080',
+  'https://192.168.10.166:8080'
 ];
 
 // 🔒 PATRONES REGEX OPTIMIZADOS (sin vulnerabilidades ReDoS)
@@ -371,6 +375,7 @@ const isSecureDomain = (originUrl) => {
       '10.0.0.19',
       '192.168.1.100',
       '192.168.0.100',
+      '192.168.10.166', // Nueva IP WiFi
       '165.227.219.173',
       'www.autoinfoplus.com',
       'autoinfoplus.com'
@@ -514,7 +519,7 @@ app.use((req, res, next) => {
       
       // Detectar ataques de subdomain takeover de forma segura
       if (hostname && hostname.endsWith('.github.io')) {
-        // Verificar que sea exactamente nuestro dominio permitido
+        // ✅ CORRECCIÓN: Validación segura sin .includes()
         const allowedGithubDomains = allowedOriginsStatic.filter(o => {
           try {
             const parsed = url.parse(o);
@@ -957,52 +962,113 @@ app.use((req, res) => {
   });
 });
 
-// ===== CONFIGURACIÓN SSL =====
-const sslOptions = {
-  key: fs.readFileSync('../key.pem'),
-  cert: fs.readFileSync('../cert.pem')
-};
+// ===== CONFIGURACIÓN SSL CONDICIONAL =====
+let server;
+const sslKeyPath = path.join(__dirname, '..', 'key.pem');
+const sslCertPath = path.join(__dirname, '..', 'cert.pem');
 
-// ===== INICIALIZACIÓN DEL SERVIDOR =====
-const server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0', () => {
-  Logger.startup(`Servidor Pest Control iniciado exitosamente con HTTPS`);
-  Logger.startup(`Host: ${config.host}`);
-  Logger.startup(`Puerto: ${config.port}`);
-  Logger.startup(`Entorno: ${config.environment}`);
-  Logger.startup(`Versión: ${config.version}`);
-  
-  // 🔒 Log de configuración de seguridad
-  Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
-  Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
-  Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
-  Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
-  Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
-  Logger.startup(`CORS Security: Ultra-secure static whitelist with ${allowedOriginsStatic.length} exact origins`);
-  Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
-  
-  if (!isProduction) {
-    Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
-    Logger.startup(`URL Red HTTPS: https://10.0.0.19:${config.port}`);
-    Logger.startup(`Sistema: ${config.system.platform} - ${config.system.hostname}`);
-  }
-  
-  // Probar conexión a la base de datos
-  db.query('SELECT NOW() as connection_test')
-    .then(result => {
-      Logger.startup('Conexión a la base de datos exitosa');
-      Logger.database('Tiempo de respuesta DB', new Date().toISOString());
-    })
-    .catch(err => {
-      Logger.critical('Error conectando a la base de datos', err.message);
+// Verificar si existen los certificados SSL
+const sslKeyExists = fs.existsSync(sslKeyPath);
+const sslCertExists = fs.existsSync(sslCertPath);
+
+if (sslKeyExists && sslCertExists) {
+  // ✅ HTTPS con certificados
+  try {
+    const sslOptions = {
+      key: fs.readFileSync(sslKeyPath),
+      cert: fs.readFileSync(sslCertPath)
+    };
+    
+    server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0', () => {
+      Logger.startup(`Servidor Pest Control iniciado exitosamente con HTTPS`);
+      Logger.startup(`🔒 SSL/TLS habilitado con certificados personalizados`);
+      Logger.startup(`📁 Certificados: ${sslKeyPath} y ${sslCertPath}`);
+      Logger.startup(`Host: ${config.host}`);
+      Logger.startup(`Puerto: ${config.port}`);
+      Logger.startup(`Entorno: ${config.environment}`);
+      Logger.startup(`Versión: ${config.version}`);
+      
+      // 🔒 Log de configuración de seguridad
+      Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
+      Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
+      Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
+      Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
+      Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
+      Logger.startup(`CORS Security: Ultra-secure static whitelist with ${allowedOriginsStatic.length} exact origins`);
+      Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
+      
+      if (!isProduction) {
+        Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
+        Logger.startup(`URL Red HTTPS: https://192.168.10.166:${config.port}`);
+        Logger.startup(`Sistema: ${config.system.platform} - ${config.system.hostname}`);
+      }
+      
+      // Probar conexión a la base de datos
+      db.query('SELECT NOW() as connection_test')
+        .then(result => {
+          Logger.startup('Conexión a la base de datos exitosa');
+          Logger.database('Tiempo de respuesta DB', new Date().toISOString());
+        })
+        .catch(err => {
+          Logger.critical('Error conectando a la base de datos', err.message);
+        });
     });
-});
+  } catch (sslError) {
+    Logger.critical('Error cargando certificados SSL', sslError.message);
+    Logger.startup('⚠️ Fallback a HTTP debido a error en certificados SSL');
+    initHttpServer();
+  }
+} else {
+  // ⚠️ HTTP sin certificados (desarrollo)
+  Logger.startup(`⚠️ Certificados SSL no encontrados - iniciando en HTTP`);
+  Logger.startup(`📁 Buscando: ${sslKeyPath} y ${sslCertPath}`);
+  Logger.startup(`📁 Key exists: ${sslKeyExists}, Cert exists: ${sslCertExists}`);
+  initHttpServer();
+}
+
+// Función para inicializar servidor HTTP
+function initHttpServer() {
+  server = app.listen(config.port, '0.0.0.0', () => {
+    Logger.startup(`Servidor Pest Control iniciado exitosamente con HTTP`);
+    Logger.startup(`⚠️ ADVERTENCIA: Sin SSL/TLS - solo para desarrollo`);
+    Logger.startup(`Host: ${config.host}`);
+    Logger.startup(`Puerto: ${config.port}`);
+    Logger.startup(`Entorno: ${config.environment}`);
+    Logger.startup(`Versión: ${config.version}`);
+    
+    // 🔒 Log de configuración de seguridad
+    Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : 'PERMISSIVE'} mode`);
+    Logger.startup(`Auth Rate Limit: ${isProduction ? '5' : '20'} attempts per 15min`);
+    Logger.startup(`General Rate Limit: ${isProduction ? '100' : '200'} requests per 15min`);
+    Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : '100'} requests per 10min`);
+    Logger.startup(`Config Rate Limit: ${isProduction ? '20' : '50'} requests per 5min`);
+    Logger.startup(`CORS Security: Ultra-secure static whitelist with ${allowedOriginsStatic.length} exact origins`);
+    Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
+    
+    if (!isProduction) {
+      Logger.startup(`URL Local HTTP: http://localhost:${config.port}`);
+      Logger.startup(`URL Red HTTP: http://192.168.10.166:${config.port}`);
+      Logger.startup(`Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
+    }
+    
+    // Probar conexión a la base de datos
+    db.query('SELECT NOW() as connection_test')
+      .then(result => {
+        Logger.startup('Conexión a la base de datos exitosa');
+        Logger.database('Tiempo de respuesta DB', new Date().toISOString());
+      })
+      .catch(err => {
+        Logger.critical('Error conectando a la base de datos', err.message);
+      });
+  });
+}
 
 // ===== MANEJO GRACEFUL DE CIERRE =====
 const gracefulShutdown = async (signal) => {
   Logger.startup(`Recibida señal ${signal}. Cerrando servidor...`);
   
   server.close(async () => {
-    Logger.startup('Servidor HTTPS cerrado');
+    Logger.startup('Servidor cerrado');
     
     try {
       if (db.end) {
