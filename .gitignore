@@ -30,7 +30,9 @@ build/
 dist/
 .build/
 /build/
-
+build-production/
+build-staging/
+build-development/
 # ===================================
 # Flutter/Dart Specific
 # ===================================
