@@ -354,7 +354,7 @@
     "matches": [
       "https://pestcontrol.costaanalytics.com/*",
       "https://api.pestcontrol.costaanalytics.com/*",
-      "https://10.0.0.19:8000/*",
+      "https://drpestcontrol:8000/*",
       "https://localhost:8000/*"
     ]
   },
@@ -364,7 +364,7 @@
       "origin": "https://pestcontrol.costaanalytics.com"
     },
     {
-      "origin": "https://10.0.0.19:8000"
+      "origin": "https://drpestcontrol:8000"
     }
   ],
   

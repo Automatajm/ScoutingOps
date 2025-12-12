@@ -33,6 +33,7 @@ dist/
 build-production/
 build-staging/
 build-development/
+
 # ===================================
 # Flutter/Dart Specific
 # ===================================
@@ -111,11 +112,40 @@ coverage/
 *.bak
 backup*.sql
 *backup*.sql
+backups/
+*.sql.gz
 
 # ===================================
 # Scripts automation working files
 # ===================================
 *.ps1
+*.sh
+
+# ===================================
+# Docker Specific (AGREGADO)
+# ===================================
+# Docker volumes (si se crean localmente)
+postgres_data/
+pgadmin_data/
+
+# Docker compose override files
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
+# Docker files temporales
+.docker/
+.dockerignore
+# ===================================
+# Project Specific (AGREGADO)
+# ===================================
+# Uploads directory
+uploads/
+backend/uploads/
+
+# Temporary build artifacts
+frontend/build-*/
+
 # ===================================
 # Temporary and OS Files
 # ===================================

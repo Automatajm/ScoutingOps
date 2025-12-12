@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Importar intl para formateo de fechas
+import 'package:intl/intl.dart';
 import '../../../models/unidad_cultivo_model.dart';
 import '../../../services/unidad_cultivo_service.dart';
-import '../../../core/config/flavor_config.dart'; // Importar configuración centralizada
-import '../../widgets/pagination_widget.dart'; // Importar widget de paginación
+import '../../../core/config/flavor_config.dart';
+import '../../widgets/pagination_widget.dart';
 
 // Clase para manejar la información de las columnas
 class ColumnInfo {
@@ -23,7 +23,6 @@ class ColumnInfo {
 }
 
 class UnidadCultivoScreen extends StatefulWidget {
-  // Callback para notificar cambios en el modo de edición
   final Function(bool)? onEditModeChanged;
 
   const UnidadCultivoScreen({Key? key, this.onEditModeChanged})
@@ -42,9 +41,14 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
   final TextEditingController _codigoController = TextEditingController();
   final TextEditingController _canteroController = TextEditingController();
   final TextEditingController _idExternoController = TextEditingController();
+  final TextEditingController _ubicacionController = TextEditingController();
 
-  // Variable para el valor seleccionado en dropdown
+  // Variables para valores seleccionados en dropdowns
   String? _selectedEstado;
+  String? _selectedUbicacion;
+
+  // Ubicaciones disponibles
+  List<String> _ubicacionesDisponibles = [];
 
   // Unidad actualmente en edición
   UnidadCultivo? _currentUnidad;
@@ -59,7 +63,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
 
   // Variables para datos de la API
   List<UnidadCultivo> _unidadData = [];
-  // Lista para datos ordenados
   List<UnidadCultivo> _sortedUnidadData = [];
   bool _isLoading = false;
   bool _isSubmitting = false;
@@ -67,10 +70,10 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
 
   // Variables para paginación
   int _currentPage = 1;
-  int _itemsPerPage = 20; // Puedes ajustar este valor según tus necesidades
+  int _itemsPerPage = 20;
   int _totalItems = 0;
 
-  // Servicio de unidades de cultivo con ApiConfig centralizada
+  // Servicio de unidades de cultivo
   final UnidadCultivoService _unidadService = UnidadCultivoService();
 
   // Mapeo de estatus a nombres de estado
@@ -87,7 +90,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // Inicializar las columnas con sus anchos predeterminados
+    // Inicializar las columnas
     _columns = [
       ColumnInfo(
         title: 'ID',
@@ -103,6 +106,11 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
         title: 'Cantero',
         width: 180,
         valueExtractor: (unidad) => unidad.cantero,
+      ),
+      ColumnInfo(
+        title: 'Ubicación',
+        width: 140,
+        valueExtractor: (unidad) => unidad.ubicacion ?? '-',
       ),
       ColumnInfo(
         title: 'ID Externo',
@@ -121,12 +129,9 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
           if (unidad.fechaCreacion != null &&
               unidad.fechaCreacion!.isNotEmpty) {
             try {
-              // Intentar parsear la fecha a DateTime
               final DateTime date = DateTime.parse(unidad.fechaCreacion!);
-              // Formatear la fecha como dd/MM/yyyy HH:mm
               return DateFormat('dd/MM/yyyy HH:mm').format(date);
             } catch (e) {
-              // Si hay error al parsear, mostrar fecha original
               return unidad.fechaCreacion ?? '-';
             }
           }
@@ -135,7 +140,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
       ),
     ];
 
-    // Escuchar cambios de tab pero verificando si está montado
+    // Escuchar cambios de tab
     _tabController.addListener(() {
       if (mounted && _tabController.index == 0) {
         _clearForm();
@@ -145,12 +150,33 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     // Cargar datos al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _loadUbicaciones();
         _loadData();
       }
     });
   }
 
-  // Método para notificar el cambio en el modo de edición de manera segura
+  // Cargar ubicaciones dinámicamente
+  Future<void> _loadUbicaciones() async {
+    try {
+      final ubicaciones = await _unidadService.getUbicaciones();
+      if (mounted) {
+        setState(() {
+          _ubicacionesDisponibles = ['Todos', ...ubicaciones];
+        });
+        print('Ubicaciones cargadas: $_ubicacionesDisponibles');
+      }
+    } catch (e) {
+      print('Error al cargar ubicaciones: $e');
+      if (mounted) {
+        setState(() {
+          _ubicacionesDisponibles = ['Todos'];
+        });
+      }
+    }
+  }
+
+  // Método para notificar el cambio en el modo de edición
   void _updateEditMode(bool isEditing) {
     if (widget.onEditModeChanged != null && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -166,14 +192,12 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     if (!mounted) return;
 
     setState(() {
-      // Restablecer el estado de ordenamiento de otras columnas
       for (int i = 0; i < _columns.length; i++) {
         if (i != columnIndex) {
           _columns[i].isSorted = false;
         }
       }
 
-      // Alternar el orden de la columna actual
       if (_columns[columnIndex].isSorted) {
         _columns[columnIndex].sortAscending =
             !_columns[columnIndex].sortAscending;
@@ -182,30 +206,24 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
         _columns[columnIndex].sortAscending = true;
       }
 
-      // Aplicar el ordenamiento
       _sortedUnidadData.sort((a, b) {
         dynamic valueA = _columns[columnIndex].valueExtractor(a);
         dynamic valueB = _columns[columnIndex].valueExtractor(b);
 
         int result;
 
-        // Manejar diferentes tipos de datos
         if (valueA is String && valueB is String) {
-          // Ordenamiento de texto
           result = valueA.compareTo(valueB);
         } else {
-          // Intento de ordenamiento numérico si es posible
           try {
             final numA = num.parse(valueA.toString());
             final numB = num.parse(valueB.toString());
             result = numA.compareTo(numB);
           } catch (e) {
-            // Si no se puede convertir a número, ordenar como texto
             result = valueA.toString().compareTo(valueB.toString());
           }
         }
 
-        // Aplicar sentido de ordenamiento (ascendente/descendente)
         return _columns[columnIndex].sortAscending ? result : -result;
       });
     });
@@ -226,26 +244,23 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
       return;
     }
 
-    // Calcular índices de inicio y fin para la página actual
     final int startIndex = (_currentPage - 1) * _itemsPerPage;
     int endIndex = startIndex + _itemsPerPage;
 
-    // Asegurarse de que el índice final no exceda el total de elementos
     if (endIndex > _unidadData.length) {
       endIndex = _unidadData.length;
     }
 
-    // Si el índice de inicio es mayor que el tamaño de la lista, ajustar a la última página
     if (startIndex >= _unidadData.length) {
       _currentPage = (_unidadData.length / _itemsPerPage).ceil();
-      return _applyPagination(); // Aplicar nuevamente con la página ajustada
+      return _applyPagination();
     }
 
-    // Obtener subconjunto de datos para la página actual
     _sortedUnidadData = _unidadData.sublist(startIndex, endIndex);
   }
 
   // Cargar datos de unidades desde la API
+  // REEMPLAZAR el método _loadData() (línea 340 aproximadamente):
   Future<void> _loadData() async {
     if (!mounted) return;
 
@@ -255,16 +270,14 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     });
 
     try {
-      // Cargar unidades
       final unidades = await _unidadService.getUnidadesCultivo();
 
-      // Actualizar estado
       if (mounted) {
         setState(() {
           _unidadData = unidades;
           _totalItems = unidades.length;
-          _currentPage = 1; // Resetear a la primera página
-          _applyPagination(); // Aplicar paginación
+          _currentPage = 1;
+          _applyPagination();
           _isLoading = false;
         });
       }
@@ -279,8 +292,8 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     }
   }
 
-  // Método para buscar unidades con filtros
-  // Método de búsqueda actualizado para la pantalla Flutter
+  // Método de búsqueda actualizado con filtro de ubicación y códigos
+  // REEMPLAZAR el método _searchUnidades() (línea 375 aproximadamente):
   Future<void> _searchUnidades() async {
     if (!mounted) return;
 
@@ -290,32 +303,38 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     });
 
     try {
-      // Mapeo inverso para obtener valores de estatus
       final estatusMap = _estatusMap.map((k, v) => MapEntry(v, k.toString()));
 
-      // Determinar el valor de estatus adecuado para el backend
       String? estatusValue;
       if (_selectedEstado != null && _selectedEstado != 'Todos') {
         estatusValue = estatusMap[_selectedEstado];
       }
 
-      // Mostrar los parámetros de búsqueda para depuración
-      print(
-          'Buscando con: busqueda=${_searchController.text}, estatus=$estatusValue');
+      String? ubicacionValue;
+      if (_selectedUbicacion != null && _selectedUbicacion != 'Todos') {
+        ubicacionValue = _selectedUbicacion;
+      }
 
-      // Enviar la búsqueda con los parámetros simplificados
+      String? busquedaValue;
+      if (_searchController.text.isNotEmpty) {
+        busquedaValue = _searchController.text;
+      }
+
+      print(
+          'Buscando con: busqueda=$busquedaValue, estatus=$estatusValue, ubicacion=$ubicacionValue');
+
       final unidades = await _unidadService.getUnidadesCultivo(
-        busqueda:
-            _searchController.text.isNotEmpty ? _searchController.text : null,
+        busqueda: busquedaValue,
         estatus: estatusValue,
+        ubicacion: ubicacionValue,
       );
 
       if (mounted) {
         setState(() {
           _unidadData = unidades;
           _totalItems = unidades.length;
-          _currentPage = 1; // Resetear a la primera página al buscar
-          _applyPagination(); // Aplicar paginación
+          _currentPage = 1;
+          _applyPagination();
           _isLoading = false;
         });
       }
@@ -337,9 +356,8 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     _codigoController.dispose();
     _canteroController.dispose();
     _idExternoController.dispose();
+    _ubicacionController.dispose();
 
-    // Asegurarse de notificar que ya no estamos en modo edición
-    // pero de manera segura, programando la llamada para después del frame actual
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onEditModeChanged?.call(false);
     });
@@ -355,14 +373,15 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
       _codigoController.clear();
       _canteroController.clear();
       _idExternoController.clear();
+      _ubicacionController.clear();
       _selectedEstado = null;
+      _selectedUbicacion = null;
       _currentUnidad = null;
       _isEditing = false;
       _isCreatingNew = false;
       _errorMessage = '';
     });
 
-    // Notificar cambio de estado de edición
     _updateEditMode(false);
   }
 
@@ -371,7 +390,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     if (!mounted) return;
 
     try {
-      // Obtener detalles completos de la unidad desde la API
       final completeUnidad =
           await _unidadService.getUnidadCultivoById(unidad.secuencia);
 
@@ -383,14 +401,13 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
           _codigoController.text = completeUnidad.codigo;
           _canteroController.text = completeUnidad.cantero;
           _idExternoController.text = completeUnidad.id.toString();
+          _ubicacionController.text = completeUnidad.ubicacion ?? '';
           _selectedEstado = _estatusMap[completeUnidad.estatus];
           _errorMessage = '';
 
-          // Cambiar a la pestaña de registro
           _tabController.animateTo(1);
         });
 
-        // Notificar que estamos en modo edición
         _updateEditMode(true);
       }
     } catch (e) {
@@ -404,15 +421,12 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     if (!mounted) return;
 
     setState(() {
-      _isCreatingNew = true; // Marcar que estamos creando una nueva unidad
+      _isCreatingNew = true;
       _isEditing = false;
-      _selectedEstado = 'Activo'; // Predeterminar como activo
+      _selectedEstado = 'Activo';
     });
 
-    // Cambiar a la pestaña de registro
     _tabController.animateTo(1);
-
-    // Notificar que estamos en modo edición
     _updateEditMode(true);
   }
 
@@ -420,14 +434,12 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
   Future<void> _saveUnidad() async {
     if (!mounted) return;
 
-    // Mostrar indicador de carga
     setState(() {
       _isSubmitting = true;
       _errorMessage = '';
     });
 
     try {
-      // Validar formulario
       if (_codigoController.text.isEmpty ||
           _canteroController.text.isEmpty ||
           _idExternoController.text.isEmpty ||
@@ -441,52 +453,50 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
         return;
       }
 
-      // Mapeo inverso para obtener valores de estatus
       final estatus = _estatusMap.map((k, v) => MapEntry(v, k));
 
-      // Crear o actualizar unidad
       if (_isEditing && _currentUnidad != null) {
-        // Actualizar unidad existente
         var updatedUnidad = _currentUnidad!.copyWith(
           codigo: _codigoController.text,
           cantero: _canteroController.text,
           id: int.tryParse(_idExternoController.text) ?? 0,
           estatus: estatus[_selectedEstado] ?? 1,
-          modificadoPor: 1, // Usuario actual como modificador
+          ubicacion: _ubicacionController.text.isNotEmpty
+              ? _ubicacionController.text
+              : null,
+          modificadoPor: 1,
         );
 
-        // Enviar actualización a la API
         final success = await _unidadService.updateUnidadCultivo(updatedUnidad);
 
         if (success && mounted) {
-          // Recargar la lista de unidades
+          await _loadUbicaciones();
           await _loadData();
           _showMessage('Unidad actualizada correctamente');
 
-          // Limpiar formulario y volver a la lista
           _clearForm();
           _tabController.animateTo(0);
         }
       } else {
-        // Crear nueva unidad
         final newUnidad = UnidadCultivo.nueva(
           codigo: _codigoController.text,
           cantero: _canteroController.text,
           id: int.tryParse(_idExternoController.text) ?? 0,
           estatus: estatus[_selectedEstado] ?? 1,
-          creadoPor: 1, // Usuario actual como creador
+          ubicacion: _ubicacionController.text.isNotEmpty
+              ? _ubicacionController.text
+              : null,
+          creadoPor: 1,
         );
 
-        // Enviar creación a la API
         final newSecuencia =
             await _unidadService.createUnidadCultivo(newUnidad);
 
         if (newSecuencia > 0 && mounted) {
-          // Recargar la lista de unidades
+          await _loadUbicaciones();
           await _loadData();
           _showMessage('Unidad creada correctamente');
 
-          // Limpiar formulario y volver a la lista
           _clearForm();
           _tabController.animateTo(0);
         }
@@ -504,7 +514,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
           _isSubmitting = false;
         });
 
-        // Finalmente, notificar que ya no estamos en modo edición
         _updateEditMode(false);
       }
     }
@@ -534,12 +543,10 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
               });
 
               try {
-                // Llamar a la API para eliminar
                 final success =
                     await _unidadService.deleteUnidadCultivo(unidad.secuencia);
 
                 if (success && mounted) {
-                  // Recargar datos
                   await _loadData();
                   _showMessage('Unidad eliminada correctamente');
                 } else if (mounted) {
@@ -574,12 +581,174 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
     );
   }
 
+  // ===== SECCIÓN DE FILTROS MEJORADA =====
+
+  // REEMPLAZAR _buildFiltrosSection() (línea 730 aproximadamente):
+  Widget _buildFiltrosSection() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          // Campo de búsqueda general
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Búsqueda General',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF505050),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por código, cantero...',
+                      hintStyle:
+                          TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                      prefixIcon: Icon(Icons.search,
+                          color: Colors.grey.shade400, size: 18),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear,
+                                  color: Colors.grey.shade400, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            )
+                          : null,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                      border: InputBorder.none,
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Filtro por ubicación
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ubicación',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF505050),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedUbicacion ?? 'Todos',
+                      isExpanded: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      items: _ubicacionesDisponibles.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child:
+                              Text(value, style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (String? value) {
+                        if (mounted) {
+                          setState(() {
+                            _selectedUbicacion =
+                                value == 'Todos' ? null : value;
+                          });
+                        }
+                      },
+                      icon: Icon(Icons.arrow_drop_down,
+                          color: Colors.grey.shade600, size: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Filtro por estado
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Estado',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF505050),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedEstado ?? 'Todos',
+                      isExpanded: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      items:
+                          ['Todos', 'Activo', 'Inactivo'].map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child:
+                              Text(value, style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (String? value) {
+                        if (mounted) {
+                          setState(() {
+                            _selectedEstado = value == 'Todos' ? null : value;
+                          });
+                        }
+                      },
+                      icon: Icon(Icons.arrow_drop_down,
+                          color: Colors.grey.shade600, size: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Widget para celda de encabezado redimensionable y ordenable
   Widget _buildResizableHeaderCell(int columnIndex) {
     final column = _columns[columnIndex];
 
     return GestureDetector(
-      // Detectar clic para ordenar
       onTap: () => _sortUnidades(columnIndex),
       child: Container(
         width: column.width,
@@ -593,7 +762,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Texto de la columna
             Text(
               column.title,
               style: TextStyle(
@@ -602,7 +770,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                 fontSize: 13,
               ),
             ),
-            // Indicador de ordenamiento
             if (column.isSorted)
               Icon(
                 column.sortAscending
@@ -651,10 +818,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                 children: List.generate(_columns.length, (index) {
                   return Stack(
                     children: [
-                      // Celda de encabezado
                       _buildResizableHeaderCell(index),
-
-                      // Manejador de redimensionamiento (excepto para la última columna)
                       if (index < _columns.length - 1)
                         Positioned(
                           right: 0,
@@ -664,7 +828,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                             onHorizontalDragUpdate: (details) {
                               if (mounted) {
                                 setState(() {
-                                  // Actualizar ancho con un mínimo para evitar columnas muy pequeñas
                                   final newWidth =
                                       _columns[index].width + details.delta.dx;
                                   if (newWidth > 60) {
@@ -701,12 +864,13 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
   }
 
   // Método para construir celdas de datos
-  Widget _buildDataCell(String text, double width) {
+  Widget _buildDataCell(String text, double width, {Color? backgroundColor}) {
     return Container(
       width: width,
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
+        color: backgroundColor,
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade200),
           right: BorderSide(color: Colors.grey.shade200),
@@ -781,7 +945,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
               fillColor: enabled ? Colors.white : Colors.grey[100],
               filled: true,
             ),
-            // Detectar cuando el campo cambia para actualizar el modo de edición de manera segura
             onChanged: (value) {
               if (_tabController.index == 1) {
                 _updateEditMode(true);
@@ -856,7 +1019,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                 if (onChanged != null) {
                   onChanged(newValue);
                 }
-                // Notificar modo edición cuando se cambia un valor del dropdown de manera segura
                 if (_tabController.index == 1) {
                   _updateEditMode(true);
                 }
@@ -883,107 +1045,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Filtros de búsqueda
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Campo de búsqueda (Código/Cantero)
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Código / Cantero',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF505050),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          height: 38,
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 0),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(4),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(4),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(4),
-                                borderSide: BorderSide(color: primaryColor),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // Campo Estado
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Estado',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF505050),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          height: 38,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedEstado ?? 'Todos',
-                              isExpanded: true,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              items: ['Todos', 'Activo', 'Inactivo']
-                                  .map((String value) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                              onChanged: (String? value) {
-                                if (mounted) {
-                                  setState(() {
-                                    _selectedEstado =
-                                        value == 'Todos' ? null : value;
-                                  });
-                                }
-                              },
-                              icon: Icon(Icons.arrow_drop_down,
-                                  color: Colors.grey.shade600),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildFiltrosSection(),
 
             Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
 
@@ -1011,10 +1073,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                         )
                       : Column(
                           children: [
-                            // Encabezados de tabla redimensionables y ordenables
                             _buildSortableTableHeader(),
-
-                            // Filas de datos o mensaje de no datos
                             _sortedUnidadData.isEmpty
                                 ? Expanded(
                                     child: Center(
@@ -1058,7 +1117,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
-                                                    // Botón de editar
                                                     InkWell(
                                                       onTap: () =>
                                                           _editUnidad(unidad),
@@ -1081,7 +1139,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                                                       ),
                                                     ),
                                                     const SizedBox(width: 8),
-                                                    // Botón de eliminar
                                                     InkWell(
                                                       onTap: () =>
                                                           _deleteUnidad(unidad),
@@ -1122,7 +1179,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                                                           column.valueExtractor(
                                                               unidad);
 
-                                                      // Celda especial para el estado (color diferente según estado)
                                                       if (column.title ==
                                                           'Estado') {
                                                         return Container(
@@ -1188,7 +1244,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                                                           ),
                                                         );
                                                       } else {
-                                                        // Celdas normales
                                                         return _buildDataCell(
                                                             value,
                                                             column.width);
@@ -1207,7 +1262,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                         ),
             ),
 
-            // Widget de paginación
             PaginationWidget(
               totalItems: _totalItems,
               itemsPerPage: _itemsPerPage,
@@ -1343,6 +1397,22 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                               ),
                             ],
                           ),
+                          const SizedBox(height: 16),
+
+                          // Tercera fila - UBICACIÓN TYPEABLE
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildFormField(
+                                  'Ubicación',
+                                  'Ingrese ubicación (ej: La Romana, Sabana de la mar)',
+                                  controller: _ubicacionController,
+                                  required: false,
+                                ),
+                              ),
+                              const Expanded(child: SizedBox()),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -1354,7 +1424,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                       children: [
                         OutlinedButton(
                           onPressed: () {
-                            // Cancelar y volver a consulta
                             _clearForm();
                             _tabController.animateTo(0);
                           },
@@ -1424,7 +1493,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
             children: [
               // Pestañas
               SizedBox(
-                width: 200, // Ancho definido para las pestañas
+                width: 200,
                 child: TabBar(
                   controller: _tabController,
                   labelColor: primaryColor,
@@ -1442,7 +1511,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                 ),
               ),
 
-              // Espacio flexible entre pestañas y botones
               Expanded(child: Container()),
 
               // Botones de acción
@@ -1451,7 +1519,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    // Buscador como botón ejecutable
                     ElevatedButton.icon(
                       onPressed: _searchUnidades,
                       icon: const Icon(Icons.search, size: 20),
@@ -1468,7 +1535,6 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-
                     ElevatedButton.icon(
                       onPressed: _nuevaUnidad,
                       icon: const Icon(Icons.add, size: 20),
@@ -1485,9 +1551,11 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-
                     ElevatedButton.icon(
-                      onPressed: _loadData, // Recargar datos
+                      onPressed: () async {
+                        await _loadUbicaciones();
+                        await _loadData();
+                      },
                       icon: const Icon(Icons.refresh, size: 20),
                       label: const Text('Recargar'),
                       style: ElevatedButton.styleFrom(
@@ -1513,10 +1581,7 @@ class _UnidadCultivoScreenState extends State<UnidadCultivoScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              // Tab de Consulta (Listado de Unidades)
               _buildConsultaTab(),
-
-              // Tab de Registro (Formulario de Unidad)
               _buildRegistroTab(),
             ],
           ),

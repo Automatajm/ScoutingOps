@@ -1,27 +1,51 @@
-// ===== config.js CON PRIORIDAD A .env MANUAL =====
+// ===== config.js CON PRIORIDAD CORREGIDA A .env Y RATE LIMITING INDUSTRIAL =====
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// ===== FUNCIÓN PARA DETECTAR FLAVOR DESDE .env ACTUAL =====
-function detectFlavorFromCurrentEnv() {
-  try {
-    const envPath = path.resolve(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      
-      // Buscar FLAVOR en el archivo .env actual
-      const flavorMatch = envContent.match(/^FLAVOR=(.+)$/m);
-      if (flavorMatch) {
-        const flavor = flavorMatch[1].trim().toLowerCase();
-        console.log(`🎯 FLAVOR detectado desde .env actual: ${flavor}`);
-        return flavor;
-      }
+// ===== FUNCIÓN PARA CARGAR Y DETECTAR FLAVOR CORRECTAMENTE =====
+function loadEnvironmentAndDetectFlavor() {
+  // 🎯 PASO 1: CARGAR .env ACTUAL PRIMERO (más alta prioridad)
+  const envPath = path.resolve(__dirname, '.env');
+  let envFlavor = null;
+  
+  if (fs.existsSync(envPath)) {
+    // Cargar .env con override para sobrescribir variables del sistema
+    require('dotenv').config({ path: envPath, override: true });
+    
+    // Leer FLAVOR del archivo .env cargado
+    envFlavor = process.env.FLAVOR;
+    if (envFlavor && ['development', 'staging', 'production'].includes(envFlavor.toLowerCase())) {
+      console.log(`🥇 PRIORIDAD 1: FLAVOR desde .env actual: ${envFlavor}`);
+      return envFlavor.toLowerCase();
     }
-  } catch (error) {
-    console.log(`⚠️ Error leyendo .env actual: ${error.message}`);
   }
-  return null;
+  
+  // 🎯 PASO 2: Variables de entorno del sistema (fallback)
+  const sysFlavor = process.env.NODE_ENV || process.env.ENVIRONMENT;
+  if (sysFlavor && ['development', 'staging', 'production'].includes(sysFlavor.toLowerCase())) {
+    console.log(`🥈 PRIORIDAD 2: FLAVOR desde variables sistema: ${sysFlavor}`);
+    return sysFlavor.toLowerCase();
+  }
+  
+  // 🎯 PASO 3: Argumentos de línea de comandos
+  const argFlavor = process.argv.find(arg => arg.startsWith('--flavor='))?.split('=')[1] ||
+                    process.argv.find(arg => arg.startsWith('--env='))?.split('=')[1];
+  if (argFlavor && ['development', 'staging', 'production'].includes(argFlavor.toLowerCase())) {
+    console.log(`🥉 PRIORIDAD 3: FLAVOR desde argumentos CLI: ${argFlavor}`);
+    return argFlavor.toLowerCase();
+  }
+  
+  // 🎯 PASO 4: Auto-detección desde frontend (último recurso)
+  const frontendFlavor = autoDetectFlavorFromFrontend();
+  if (frontendFlavor && ['development', 'staging', 'production'].includes(frontendFlavor)) {
+    console.log(`🔄 PRIORIDAD 4: FLAVOR desde frontend build: ${frontendFlavor}`);
+    return frontendFlavor;
+  }
+  
+  // 🎯 DEFAULT: development
+  console.log(`🎯 DEFAULT: FLAVOR por defecto: development`);
+  return 'development';
 }
 
 // ===== FUNCIÓN PARA AUTO-DETECTAR FLAVOR DEL FRONTEND (FALLBACK) =====
@@ -42,11 +66,9 @@ function autoDetectFlavorFromFrontend() {
         
         // Buscar indicadores de flavor en el contenido
         if (content.includes('production') || content.includes('PRODUCTION')) {
-          console.log(`🔍 Flavor detectado desde frontend build: production`);
           return 'production';
         }
         if (content.includes('staging') || content.includes('STAGING')) {
-          console.log(`🔍 Flavor detectado desde frontend build: staging`);
           return 'staging';
         }
       }
@@ -58,107 +80,14 @@ function autoDetectFlavorFromFrontend() {
   return null;
 }
 
-// ===== FUNCIÓN PARA DETECTAR FLAVOR CON PRIORIDADES =====
-function detectFlavorWithPriority() {
-  // 🥇 PRIORIDAD 1: Variable de entorno directa (npm scripts)
-  const envFlavor = process.env.FLAVOR || process.env.NODE_ENV || process.env.ENVIRONMENT;
-  if (envFlavor && ['development', 'staging', 'production'].includes(envFlavor.toLowerCase())) {
-    console.log(`🥇 PRIORIDAD 1: FLAVOR desde variable de entorno: ${envFlavor}`);
-    return envFlavor.toLowerCase();
-  }
-  
-  // 🥈 PRIORIDAD 2: Argumentos de línea de comandos
-  const argFlavor = process.argv.find(arg => arg.startsWith('--flavor='))?.split('=')[1] ||
-                    process.argv.find(arg => arg.startsWith('--env='))?.split('=')[1];
-  if (argFlavor && ['development', 'staging', 'production'].includes(argFlavor.toLowerCase())) {
-    console.log(`🥈 PRIORIDAD 2: FLAVOR desde argumentos CLI: ${argFlavor}`);
-    return argFlavor.toLowerCase();
-  }
-  
-  // 🥉 PRIORIDAD 3: Archivo .env actual (el que copiaste manualmente)
-  const currentEnvFlavor = detectFlavorFromCurrentEnv();
-  if (currentEnvFlavor && ['development', 'staging', 'production'].includes(currentEnvFlavor)) {
-    console.log(`🥉 PRIORIDAD 3: FLAVOR desde .env actual: ${currentEnvFlavor}`);
-    return currentEnvFlavor;
-  }
-  
-  // 🔄 PRIORIDAD 4: Auto-detección desde frontend (fallback)
-  const frontendFlavor = autoDetectFlavorFromFrontend();
-  if (frontendFlavor && ['development', 'staging', 'production'].includes(frontendFlavor)) {
-    console.log(`🔄 PRIORIDAD 4: FLAVOR desde frontend build: ${frontendFlavor}`);
-    return frontendFlavor;
-  }
-  
-  // 🎯 DEFAULT: development
-  console.log(`🎯 DEFAULT: FLAVOR por defecto: development`);
-  return 'development';
-}
+// ===== CARGAR CONFIGURACIÓN DE ENTORNO CON LÓGICA CORREGIDA =====
+const currentFlavor = loadEnvironmentAndDetectFlavor();
 
-// ===== CARGAR .env SEGÚN FLAVOR DETECTADO =====
-function loadEnvironmentConfig() {
-  // 1. Detectar flavor con sistema de prioridades
-  const detectedFlavor = detectFlavorWithPriority();
-  
-  // 2. Determinar archivo .env original (para verificación)
-  let originalEnvFile;
-  switch (detectedFlavor) {
-    case 'production':
-      originalEnvFile = '.env.production';
-      break;
-    case 'staging':
-      originalEnvFile = '.env.staging';
-      break;
-    case 'development':
-    default:
-      originalEnvFile = '.env.development';
-      break;
-  }
-
-  // 3. Cargar archivo .env actual (ya copiado por npm script)
-  const currentEnvPath = path.resolve(__dirname, '.env');
-  const originalEnvPath = path.resolve(__dirname, '..', originalEnvFile);
-  
-  try {
-    // Cargar .env actual
-    require('dotenv').config({ path: currentEnvPath });
-    
-    console.log(`🎯 Auto-detección de entorno:`);
-    console.log(`   Flavor detectado: ${detectedFlavor}`);
-    console.log(`   Archivo original: ${originalEnvFile}`);
-    console.log(`   Archivo actual: .env`);
-    console.log(`   Ruta actual: ${currentEnvPath}`);
-    
-    // Verificar que el archivo actual existe
-    if (fs.existsSync(currentEnvPath)) {
-      console.log(`✅ Archivo .env actual cargado exitosamente`);
-      
-      // Verificar que FLAVOR del .env coincide
-      const envFlavor = process.env.FLAVOR;
-      if (envFlavor && envFlavor !== detectedFlavor) {
-        console.log(`⚠️ ADVERTENCIA: Flavor detectado (${detectedFlavor}) vs .env FLAVOR (${envFlavor})`);
-        console.log(`🔄 Usando FLAVOR del .env: ${envFlavor}`);
-        return envFlavor.toLowerCase();
-      }
-    } else {
-      console.log(`⚠️ Archivo .env actual no encontrado, cargando original`);
-      require('dotenv').config({ path: originalEnvPath });
-    }
-    
-    // Establecer FLAVOR si no está definido
-    if (!process.env.FLAVOR) {
-      process.env.FLAVOR = detectedFlavor;
-    }
-    
-  } catch (error) {
-    console.log(`❌ Error cargando archivos .env:`, error.message);
-    console.log(`📋 Usando configuración por defecto para ${detectedFlavor}`);
-  }
-
-  return detectedFlavor;
-}
-
-// ===== CARGAR CONFIGURACIÓN DE ENTORNO =====
-const currentFlavor = loadEnvironmentConfig();
+// ===== LOGGING MEJORADO DE CONFIGURACIÓN =====
+console.log(`🎯 Configuración de entorno cargada:`);
+console.log(`   Flavor detectado: ${currentFlavor}`);
+console.log(`   Archivo .env: ${fs.existsSync(path.resolve(__dirname, '.env')) ? 'encontrado' : 'no encontrado'}`);
+console.log(`   Variables de entorno: NODE_ENV=${process.env.NODE_ENV || 'no definido'}, ENVIRONMENT=${process.env.ENVIRONMENT || 'no definido'}`);
 
 // ===== FUNCIÓN PARA DETECTAR IP PRINCIPAL =====
 function getMainIP() {
@@ -254,26 +183,48 @@ const config = {
     allowSelfSigned: process.env.ALLOW_SELF_SIGNED_CERTS === 'true'
   },
   
-  // Rate Limiting basado en FLAVOR
+  // ✅ Rate Limiting basado en FLAVOR - VALORES AMPLIADOS PARA USO INDUSTRIAL
   rateLimit: {
     windowMs: (parseInt(process.env.RATE_LIMIT_WINDOW) || 15) * 60 * 1000,
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 
-                 (currentFlavor === 'production' ? 100 : 
-                  currentFlavor === 'staging' ? 150 : 200),
+                 (currentFlavor === 'production' ? 1000 : // ✅ AMPLIADO DE 100 A 1000
+                  currentFlavor === 'staging' ? 800 :     // ✅ AMPLIADO DE 150 A 800
+                  500),                                   // ✅ AMPLIADO DE 200 A 500
     authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX) ||
-                     (currentFlavor === 'production' ? 5 : 
-                      currentFlavor === 'staging' ? 10 : 20)
+                     (currentFlavor === 'production' ? 25 : // ✅ AMPLIADO DE 5 A 25
+                      currentFlavor === 'staging' ? 35 :    // ✅ AMPLIADO DE 10 A 35
+                      50)                                   // ✅ AMPLIADO DE 20 A 50
   },
   
-  // CORS basado en FLAVOR
+  // ✅ CORS basado en FLAVOR - SOLO CAMBIO PARA DRPESTCONTROL
   cors: {
-    origins: process.env.ALLOWED_ORIGINS ? 
-      (process.env.ALLOWED_ORIGINS === '*' ? ['*'] : process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())) :
-      (currentFlavor === 'production' ? 
-        ['https://app.pestcontrol.com'] : 
-        currentFlavor === 'staging' ?
-        ['https://staging.pestcontrol.com'] :
-        ['*']), // Wildcard solo en development
+    origins: (() => {
+      if (process.env.ALLOWED_ORIGINS) {
+        return process.env.ALLOWED_ORIGINS === '*' 
+          ? ['*'] 
+          : process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+      }
+      
+      // Configuración por defecto basada en flavor
+      switch (currentFlavor) {
+        case 'production':
+          return [
+            'https://drpestcontrol:8000',    // ✅ AGREGADO
+            'https://drpestcontrol:8080',    // ✅ AGREGADO
+            'https://app.pestcontrol.com',
+            'https://192.168.137.177:8080'
+          ];
+        case 'staging':
+          return [
+            'https://drpestcontrol:8000',    // ✅ AGREGADO
+            'https://drpestcontrol:8080',    // ✅ AGREGADO
+            'https://staging.pestcontrol.com'
+          ];
+        case 'development':
+        default:
+          return ['*']; // Wildcard solo en development
+      }
+    })(),
     credentials: process.env.CORS_CREDENTIALS === 'true' || process.env.CORS_ENABLED === 'true'
   },
   
@@ -339,6 +290,8 @@ console.log(`   Base URL: ${config.baseUrl}`);
 console.log(`   SSL: ${config.ssl.enabled ? 'Habilitado' : 'Deshabilitado'}`);
 console.log(`   Pool DB: ${config.database.pool.min}-${config.database.pool.max} conexiones`);
 console.log(`   Debug Mode: ${config.debug.enabled ? 'Habilitado' : 'Deshabilitado'}`);
+console.log(`   ✅ Rate Limit General: ${config.rateLimit.maxRequests} req/15min (AMPLIADO para uso industrial)`);
+console.log(`   ✅ Rate Limit Auth: ${config.rateLimit.authMaxRequests} attempts/15min (AMPLIADO para uso industrial)`);
 
 // Solo mostrar detalles en development/staging
 if (config.flavor !== 'production') {
@@ -346,8 +299,6 @@ if (config.flavor !== 'production') {
   console.log(`   API URL: ${config.apiUrl}`);
   console.log(`   Public URL: ${config.publicUrl}`);
   console.log(`   WebSocket URL: ${config.urls.websocket}`);
-  console.log(`   Rate Limit: ${config.rateLimit.maxRequests} req/15min`);
-  console.log(`   Auth Limit: ${config.rateLimit.authMaxRequests} attempts/15min`);
   console.log(`   CORS Origins: ${Array.isArray(config.cors.origins) ? config.cors.origins.join(', ') : config.cors.origins}`);
 } else {
   // Logging seguro para producción

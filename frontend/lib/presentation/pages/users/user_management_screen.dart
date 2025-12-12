@@ -1646,6 +1646,8 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                         ElevatedButton(
                           onPressed: _isSubmitting ? null : _saveUser,
                           style: ElevatedButton.styleFrom(
+                            foregroundColor:
+                                const Color.fromARGB(173, 116, 115, 115),
                             backgroundColor:
                                 const Color.fromARGB(255, 255, 255, 255),
                             padding: const EdgeInsets.symmetric(

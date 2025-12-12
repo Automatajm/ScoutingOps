@@ -10,6 +10,7 @@ class FormFields {
     bool required = false,
     bool readOnly = false,
     int maxLines = 1,
+    TextInputType? keyboardType,
     Function()? onTap,
     Function(String)? onChanged,
   }) {
@@ -49,6 +50,7 @@ class FormFields {
             enabled: enabled,
             readOnly: readOnly,
             maxLines: maxLines,
+            keyboardType: keyboardType,
             onTap: onTap,
             decoration: InputDecoration(
               hintText: hint,
@@ -108,6 +110,9 @@ class FormFields {
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade300),
             borderRadius: BorderRadius.circular(4),
+            color: readOnly
+                ? Colors.grey.shade100
+                : Colors.white, // ✅ Fondo gris si bloqueado
           ),
           child: TextField(
             controller: controller,
@@ -122,7 +127,7 @@ class FormFields {
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: InputBorder.none,
-              fillColor: Colors.white,
+              fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
               filled: true,
             ),
             onChanged: onChanged,
@@ -140,6 +145,7 @@ class FormFields {
     String? value,
     Function(String?)? onChanged,
     bool required = false,
+    bool readOnly = false, // ✅ NUEVO parámetro
   }) {
     // Si el valor seleccionado no está en las opciones, lo establecemos a null
     if (value != null && !options.contains(value)) {
@@ -175,9 +181,12 @@ class FormFields {
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(
+                color: readOnly ? Colors.grey.shade300 : Colors.grey.shade300),
             borderRadius: BorderRadius.circular(4),
-            color: Colors.white,
+            color: readOnly
+                ? Colors.grey.shade100
+                : Colors.white, // ✅ Fondo gris si bloqueado
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -196,8 +205,14 @@ class FormFields {
                   child: Text(option),
                 );
               }).toList(),
-              onChanged: onChanged,
-              icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+              onChanged:
+                  readOnly ? null : onChanged, // ✅ Deshabilitar si readOnly
+              icon: Icon(Icons.arrow_drop_down,
+                  color:
+                      readOnly ? Colors.grey.shade400 : Colors.grey.shade600),
+              disabledHint: value != null
+                  ? Text(value)
+                  : null, // ✅ Mostrar valor actual aunque esté deshabilitado
             ),
           ),
         ),

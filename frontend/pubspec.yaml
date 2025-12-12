@@ -1,5 +1,6 @@
-# ===== PUBSPEC.YAML CORREGIDO =====
-# REMOVER mobile_scanner que está causando conflicto
+# ===== PUBSPEC.YAML - DR PEST CONTROL =====
+# Costa Analytics - Flutter Web con SQLite Persistente
+# Actualizado: 2025-12-06
 
 name: pestcontrol
 description: App web para control de plagas - Costa Analytics (Móvil + PC)
@@ -53,9 +54,8 @@ dependencies:
   # ===== ARCHIVOS =====
   excel: ^4.0.6
   file_picker: ^6.1.1
-  
-  # ===== ESCÁNER: REMOVER mobile_scanner =====
-  # mobile_scanner: ^3.5.6  # ❌ COMENTADO - CAUSA CONFLICTO
+  path_provider: ^2.1.2
+  path: ^1.9.0
   
   # ===== UTILIDADES =====
   logging: ^1.2.0
@@ -64,6 +64,7 @@ dependencies:
   form_validator: ^2.1.1
   json_annotation: ^4.8.1
   retry: ^3.1.2
+  uuid: ^4.3.3
   
   # ===== UI/UX =====
   flutter_animate: ^4.2.0
@@ -76,6 +77,12 @@ dependencies:
   responsive_framework: ^1.1.1
   fluttertoast: ^8.2.4
 
+  # ===== SQLITE PERSISTENTE PARA WEB (NUEVO) =====
+  # Drift: ORM para SQLite con soporte completo para Flutter Web
+  drift: ^2.18.0
+  # SQLite para plataformas nativas (móvil/desktop)
+  sqlite3_flutter_libs: ^0.5.20
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -84,6 +91,9 @@ dev_dependencies:
   mockito: ^5.4.4
   bloc_test: ^9.1.5
   json_serializable: ^6.7.1
+  
+  # ===== GENERADOR DE CÓDIGO DRIFT (NUEVO) =====
+  drift_dev: ^2.18.0
 
 flutter:
   uses-material-design: true

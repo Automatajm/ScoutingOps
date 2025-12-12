@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../models/monitoreo_model.dart';
 import '../utils/constants.dart';
 import '../utils/nivel_calculator.dart';
 import '../widgets/form_fields.dart';
 import '../widgets/responsive_card.dart';
+import '../widgets/cantero_wizard_bar.dart'; // ✅ NUEVO: Import del wizard
+import '../widgets/searchable_variedad_selector.dart'; // ✅ NUEVO: Selector de variedad con búsqueda
 
 class RegistroTab extends StatefulWidget {
   final Monitoreo? currentMonitoreo;
@@ -24,6 +27,9 @@ class RegistroTab extends StatefulWidget {
   final TextEditingController muestra1Controller;
   final TextEditingController muestra2Controller;
   final TextEditingController muestra3Controller;
+
+  // ✅ NUEVO: Controlador para rango de canteros
+  final TextEditingController? canterosRangeController;
 
   // Valores seleccionados
   final String? selectedCasa;
@@ -59,11 +65,30 @@ class RegistroTab extends StatefulWidget {
   final Function(String) onMuestra2Changed;
   final Function(String) onMuestra3Changed;
 
+  // ✅ NUEVO: Callback para cambio de rango de canteros
+  final Function(String)? onCanterosRangeChanged;
+
   // Propiedad para modo offline
   final bool isOfflineMode;
 
   // Nueva propiedad para identificar pantallas pequeñas
   final bool isSmallScreen;
+
+  // Indica si estamos en modo parcial
+  final bool isInPartialSaveMode;
+  final bool isEditingExistingPartial;
+
+  // Set de plagas ya registradas (cantero|variedad|plaga en manual, plaga en auto)
+  final Set<String> plagasRegistradas;
+
+  // Set de variedades ya usadas (solo modo manual)
+  final Set<String> variedadesUsadas;
+
+  // ✅ NUEVO: Propiedades del wizard de canteros
+  final bool isWizardActive;
+  final bool isWizardRangeLocked;
+  final int wizardCanteroActual;
+  final int wizardTotalCanteros;
 
   const RegistroTab({
     Key? key,
@@ -83,6 +108,7 @@ class RegistroTab extends StatefulWidget {
     required this.muestra1Controller,
     required this.muestra2Controller,
     required this.muestra3Controller,
+    this.canterosRangeController, // ✅ NUEVO
     required this.selectedCasa,
     required this.selectedVariedad,
     required this.selectedPlaga,
@@ -109,8 +135,18 @@ class RegistroTab extends StatefulWidget {
     required this.onMuestra1Changed,
     required this.onMuestra2Changed,
     required this.onMuestra3Changed,
+    this.onCanterosRangeChanged, // ✅ NUEVO
     this.isOfflineMode = false,
     this.isSmallScreen = false,
+    this.isInPartialSaveMode = false,
+    this.isEditingExistingPartial = false,
+    this.plagasRegistradas = const {},
+    this.variedadesUsadas = const {},
+    // ✅ NUEVO: Valores por defecto del wizard
+    this.isWizardActive = false,
+    this.isWizardRangeLocked = false,
+    this.wizardCanteroActual = 0,
+    this.wizardTotalCanteros = 0,
   }) : super(key: key);
 
   @override
@@ -122,6 +158,12 @@ class _RegistroTabState extends State<RegistroTab> {
   bool _isLoteExpanded = true;
   bool _isMonitoreoExpanded = true;
   bool _isMuestrasExpanded = true;
+
+  // Variable para error de cantero
+  String? _canteroError;
+
+  // ✅ NUEVO: Error para rango de canteros
+  String? _canterosRangeError;
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +179,219 @@ class _RegistroTabState extends State<RegistroTab> {
     );
   }
 
+  // ✅ NUEVO: Widget para el campo de rango de canteros
+  Widget _buildCanterosRangeField() {
+    if (widget.canterosRangeController == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isLocked = widget.isWizardRangeLocked || widget.isInPartialSaveMode;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextFormField(
+                controller: widget.canterosRangeController,
+                enabled: !isLocked,
+                decoration: InputDecoration(
+                  labelText: 'Canteros (rango)',
+                  hintText: 'Ej: 1-10',
+                  helperText: isLocked
+                      ? '🔒 Bloqueado durante iteración'
+                      : 'Formato: inicio-fin',
+                  helperStyle: TextStyle(
+                    color: isLocked
+                        ? Colors.orange.shade700
+                        : Colors.grey.shade600,
+                    fontSize: 11,
+                  ),
+                  errorText: _canterosRangeError,
+                  prefixIcon: Icon(
+                    isLocked ? Icons.lock : Icons.edit,
+                    size: 20,
+                    color: isLocked ? Colors.orange : Colors.indigo,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: isLocked ? Colors.orange.shade50 : Colors.white,
+                ),
+                keyboardType: TextInputType.text,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]')),
+                  LengthLimitingTextInputFormatter(7),
+                ],
+                onChanged: (value) {
+                  final error = _validateCanterosRange(value);
+                  setState(() {
+                    _canterosRangeError = error;
+                  });
+                  if (error == null && widget.onCanterosRangeChanged != null) {
+                    widget.onCanterosRangeChanged!(value);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Campo de cantero actual (siempre readonly)
+            Expanded(
+              flex: 1,
+              child: TextFormField(
+                controller: widget.canteroController,
+                enabled: false, // ✅ SIEMPRE readonly cuando hay wizard
+                decoration: InputDecoration(
+                  labelText: 'Cantero actual',
+                  prefixIcon: Icon(
+                    Icons.location_on,
+                    size: 20,
+                    color: Colors.indigo.shade600,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: Colors.indigo.shade50,
+                ),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo.shade800,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+
+        // Indicador de progreso del wizard
+        if (widget.isWizardActive && widget.wizardTotalCanteros > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildWizardProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  // ✅ NUEVO: Indicador de progreso del wizard
+  Widget _buildWizardProgressIndicator() {
+    final parser =
+        CanteroRangeParser.parse(widget.canterosRangeController?.text ?? '');
+    if (!parser.isValid || parser.isSingleCantero) {
+      return const SizedBox.shrink();
+    }
+
+    final posicion = widget.wizardCanteroActual - parser.inicio + 1;
+    final progreso = posicion / parser.total;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.indigo.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.indigo.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.route, size: 16, color: Colors.indigo.shade700),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Wizard activo',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade700,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$posicion de ${parser.total}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progreso,
+              backgroundColor: Colors.indigo.shade100,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo.shade600),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Canteros: ${parser.inicio} → ${parser.fin}',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.indigo.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NUEVO: Validar formato del rango
+  String? _validateCanterosRange(String value) {
+    if (value.isEmpty) return null; // Permitir vacío
+
+    final parts = value.split('-');
+    if (parts.length != 2) {
+      return 'Formato: inicio-fin';
+    }
+
+    final inicio = int.tryParse(parts[0].trim());
+    final fin = int.tryParse(parts[1].trim());
+
+    if (inicio == null || fin == null) {
+      return 'Use solo números';
+    }
+
+    if (inicio < 1 || inicio > 110) {
+      return 'Inicio: 1-110';
+    }
+
+    if (fin < 1 || fin > 110) {
+      return 'Fin: 1-110';
+    }
+
+    if (inicio > fin) {
+      return 'Inicio > fin';
+    }
+
+    return null;
+  }
+
   // Layout para pantallas de escritorio
   Widget _buildDesktopLayout(List<String> nivelesMuestra) {
+    // Determinar si mostrar el campo de canteros del wizard
+    final showWizardFields = widget.canterosRangeController != null &&
+        (widget.codigoLoteController.text.isNotEmpty || widget.isManualEntry);
+
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(
@@ -232,9 +485,12 @@ class _RegistroTabState extends State<RegistroTab> {
                               !widget.isManualEntry,
                               widget.isManualEntry
                             ],
-                            onPressed: (index) {
-                              widget.onToggleEntryMode();
-                            },
+                            onPressed: widget.isWizardRangeLocked ||
+                                    widget.isInPartialSaveMode
+                                ? null // ✅ Deshabilitar si wizard está bloqueado
+                                : (index) {
+                                    widget.onToggleEntryMode();
+                                  },
                             borderRadius: BorderRadius.circular(4),
                             children: const [
                               Padding(
@@ -247,6 +503,21 @@ class _RegistroTabState extends State<RegistroTab> {
                               ),
                             ],
                           ),
+                          // ✅ NUEVO: Indicador de modo bloqueado
+                          if (widget.isWizardRangeLocked ||
+                              widget.isInPartialSaveMode)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Tooltip(
+                                message:
+                                    'El modo está bloqueado durante la iteración',
+                                child: Icon(
+                                  Icons.lock,
+                                  size: 18,
+                                  color: Colors.orange.shade600,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -283,13 +554,18 @@ class _RegistroTabState extends State<RegistroTab> {
                                     hint:
                                         'Escanee o ingrese el código del lote',
                                     controller: widget.codigoLoteController,
-                                    readOnly: true,
+                                    readOnly: widget.isWizardRangeLocked ||
+                                        widget.isInPartialSaveMode,
                                     required: false,
+                                    keyboardType: TextInputType.number,
                                   ),
                                 ),
                                 const SizedBox(width: 16),
                                 ElevatedButton.icon(
-                                  onPressed: widget.onScanBarcode,
+                                  onPressed: (widget.isWizardRangeLocked ||
+                                          widget.isInPartialSaveMode)
+                                      ? null
+                                      : widget.onScanBarcode,
                                   icon: const Icon(Icons.qr_code_scanner),
                                   label: const Text('Escanear'),
                                   style: ElevatedButton.styleFrom(
@@ -304,7 +580,13 @@ class _RegistroTabState extends State<RegistroTab> {
 
                           if (!widget.isManualEntry) const SizedBox(height: 16),
 
-                          // Campos para entrada manual
+                          // ✅ NUEVO: Campo de rango de canteros (si está disponible)
+                          if (showWizardFields) ...[
+                            _buildCanterosRangeField(),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Campos para entrada (sin el campo individual de cantero si hay wizard)
                           Row(
                             children: [
                               Expanded(
@@ -313,22 +595,63 @@ class _RegistroTabState extends State<RegistroTab> {
                                   hint: 'Seleccione casa',
                                   options: widget.casas,
                                   value: widget.selectedCasa,
-                                  onChanged: widget.onCasaChanged,
+                                  onChanged: (widget.isWizardRangeLocked ||
+                                          widget.isInPartialSaveMode)
+                                      ? null
+                                      : widget.onCasaChanged,
                                   required: true,
+                                  readOnly: widget.isWizardRangeLocked ||
+                                      widget.isInPartialSaveMode,
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              Expanded(
-                                child: FormFields.buildNumberField(
-                                  label: 'Cantero',
-                                  hint: 'Ingrese el cantero',
-                                  controller: widget.canteroController,
-                                  required: true,
-                                  readOnly: !(widget.isManualEntry ||
-                                      widget.codigoLoteController.text
-                                          .isNotEmpty),
+                              // ✅ MODIFICADO: Solo mostrar campo cantero individual si NO hay wizard
+                              if (!showWizardFields)
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: widget.canteroController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Cantero * (1-110)',
+                                      hintText: 'Número del 1 al 110',
+                                      errorText: _canteroError,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(3),
+                                    ],
+                                    readOnly: widget.isInPartialSaveMode ||
+                                        !(widget.isManualEntry ||
+                                            widget.codigoLoteController.text
+                                                .isNotEmpty),
+                                    onChanged: (value) {
+                                      if (value.isNotEmpty) {
+                                        final numero = int.tryParse(value);
+                                        if (numero == null ||
+                                            numero < 1 ||
+                                            numero > 110) {
+                                          setState(() {
+                                            _canteroError =
+                                                'Debe ser un número entre 1 y 110';
+                                          });
+                                        } else {
+                                          setState(() {
+                                            _canteroError = null;
+                                          });
+                                        }
+                                      } else {
+                                        setState(() {
+                                          _canteroError = null;
+                                        });
+                                      }
+                                    },
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -336,11 +659,9 @@ class _RegistroTabState extends State<RegistroTab> {
                           Row(
                             children: [
                               Expanded(
-                                // CAMPO DE VARIEDAD DINÁMICO
                                 child: widget.isManualEntry ||
                                         widget.codigoLoteController.text.isEmpty
-                                    ? // MODO MANUAL: Dropdown editable
-                                    FormFields.buildDropdownField(
+                                    ? SearchableVariedadSelector(
                                         label: 'Variedad',
                                         hint: 'Seleccione variedad',
                                         options: widget.variedades,
@@ -348,8 +669,7 @@ class _RegistroTabState extends State<RegistroTab> {
                                         onChanged: widget.onVariedadChanged,
                                         required: true,
                                       )
-                                    : // MODO AUTOMÁTICO: Campo de solo lectura
-                                    FormFields.buildFormField(
+                                    : FormFields.buildFormField(
                                         label: 'Variedad',
                                         hint: 'Variedad del lote',
                                         controller: TextEditingController(
@@ -407,6 +727,120 @@ class _RegistroTabState extends State<RegistroTab> {
                           ),
                           const SizedBox(height: 16),
 
+                          // Indicadores de plagas registradas (código existente)
+                          if (widget.isManualEntry &&
+                              widget.isInPartialSaveMode &&
+                              widget.plagasRegistradas.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: Colors.purple.shade300),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.info_outline,
+                                          size: 16,
+                                          color: Colors.purple.shade800),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Plagas registradas en este cantero:',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.purple.shade800,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ...widget.plagasRegistradas.map((registro) {
+                                    final partes = registro.split('|');
+                                    if (partes.length == 3) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
+                                        child: Text(
+                                          '• ${partes[1]} - ${partes[2]}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.purple.shade700,
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
+                                        child: Text(
+                                          '• $registro',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.purple.shade700,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }).toList(),
+                                ],
+                              ),
+                            ),
+
+                          // Indicadores modo automático (código existente)
+                          if (!widget.isManualEntry &&
+                              widget.isInPartialSaveMode &&
+                              widget.plagasRegistradas.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: Colors.purple.shade300),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.info_outline,
+                                          size: 16,
+                                          color: Colors.purple.shade800),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Plagas registradas en este lote:',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.purple.shade800,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ...widget.plagasRegistradas.map((plaga) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        '• $plaga',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.purple.shade700,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            ),
+
                           // Cantidades
                           Row(
                             children: [
@@ -443,7 +877,7 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Datos de muestras y niveles
+                    // Datos de muestras y niveles (código existente sin cambios)
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -494,7 +928,7 @@ class _RegistroTabState extends State<RegistroTab> {
                             ),
                           ),
 
-                          // Muestra 1
+                          // Muestras (código existente)
                           Row(
                             children: [
                               Expanded(
@@ -514,14 +948,20 @@ class _RegistroTabState extends State<RegistroTab> {
                                   hint: 'Nivel',
                                   options: nivelesMuestra,
                                   value: widget.selectedNivelMuestra1,
-                                  onChanged: widget.onNivelMuestra1Changed,
+                                  onChanged: widget.muestra1Controller.text
+                                          .trim()
+                                          .isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra1Changed,
+                                  readOnly: widget.muestra1Controller.text
+                                      .trim()
+                                      .isEmpty,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
 
-                          // Muestra 2
                           Row(
                             children: [
                               Expanded(
@@ -541,14 +981,20 @@ class _RegistroTabState extends State<RegistroTab> {
                                   hint: 'Nivel',
                                   options: nivelesMuestra,
                                   value: widget.selectedNivelMuestra2,
-                                  onChanged: widget.onNivelMuestra2Changed,
+                                  onChanged: widget.muestra2Controller.text
+                                          .trim()
+                                          .isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra2Changed,
+                                  readOnly: widget.muestra2Controller.text
+                                      .trim()
+                                      .isEmpty,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
 
-                          // Muestra 3
                           Row(
                             children: [
                               Expanded(
@@ -568,13 +1014,20 @@ class _RegistroTabState extends State<RegistroTab> {
                                   hint: 'Nivel',
                                   options: nivelesMuestra,
                                   value: widget.selectedNivelMuestra3,
-                                  onChanged: widget.onNivelMuestra3Changed,
+                                  onChanged: widget.muestra3Controller.text
+                                          .trim()
+                                          .isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra3Changed,
+                                  readOnly: widget.muestra3Controller.text
+                                      .trim()
+                                      .isEmpty,
                                 ),
                               ),
                             ],
                           ),
 
-                          // Información sobre niveles calculados automáticamente
+                          // Niveles calculados (código existente)
                           if (widget.muestra1Controller.text.isNotEmpty ||
                               widget.muestra2Controller.text.isNotEmpty ||
                               widget.muestra3Controller.text.isNotEmpty)
@@ -633,13 +1086,11 @@ class _RegistroTabState extends State<RegistroTab> {
                           child: const Text('Cancelar'),
                         ),
                         const SizedBox(width: 16),
-                        // BOTÓN PARCIAL
                         ElevatedButton(
                           onPressed:
                               widget.isSubmitting ? null : widget.onSavePartial,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFFE91E63), // Color fucsia
+                            backgroundColor: const Color(0xFFE91E63),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
@@ -648,7 +1099,9 @@ class _RegistroTabState extends State<RegistroTab> {
                             ),
                             disabledBackgroundColor: Colors.grey.shade400,
                           ),
-                          child: const Text('Parcial'),
+                          child: Text(widget.isEditingExistingPartial
+                              ? 'Editar Parcial'
+                              : 'Parcial'),
                         ),
                         const SizedBox(width: 16),
                         ElevatedButton(
@@ -675,8 +1128,11 @@ class _RegistroTabState extends State<RegistroTab> {
     );
   }
 
-  // Layout para pantallas móviles
+  // Layout para pantallas móviles - Similar al desktop pero adaptado
   Widget _buildMobileLayout(List<String> nivelesMuestra) {
+    final showWizardFields = widget.canterosRangeController != null &&
+        (widget.codigoLoteController.text.isNotEmpty || widget.isManualEntry);
+
     return widget.isSubmitting
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(
@@ -724,9 +1180,12 @@ class _RegistroTabState extends State<RegistroTab> {
                                   !widget.isManualEntry,
                                   widget.isManualEntry
                                 ],
-                                onPressed: (index) {
-                                  widget.onToggleEntryMode();
-                                },
+                                onPressed: (widget.isWizardRangeLocked ||
+                                        widget.isInPartialSaveMode)
+                                    ? null
+                                    : (index) {
+                                        widget.onToggleEntryMode();
+                                      },
                                 borderRadius: BorderRadius.circular(4),
                                 constraints: const BoxConstraints(
                                   minHeight: 36,
@@ -740,6 +1199,16 @@ class _RegistroTabState extends State<RegistroTab> {
                                 ],
                               ),
                             ),
+                            if (widget.isWizardRangeLocked ||
+                                widget.isInPartialSaveMode)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Icon(
+                                  Icons.lock,
+                                  size: 16,
+                                  color: Colors.orange.shade600,
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -747,7 +1216,7 @@ class _RegistroTabState extends State<RegistroTab> {
                   ),
                 ),
 
-                // Mensaje de error si existe
+                // Mensaje de error
                 if (widget.errorMessage.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -763,7 +1232,7 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                   ),
 
-                // Indicador de modo offline
+                // Indicador offline
                 if (widget.isOfflineMode)
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -775,15 +1244,12 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.wifi_off,
-                          color: Colors.red.shade800,
-                          size: 16,
-                        ),
+                        Icon(Icons.wifi_off,
+                            color: Colors.red.shade800, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Modo sin conexión: Los cambios se guardarán localmente.',
+                            'Modo sin conexión',
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontWeight: FontWeight.w500,
@@ -803,23 +1269,28 @@ class _RegistroTabState extends State<RegistroTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Código de lote (con botón de escaneo)
+                      // Código de lote
                       if (!widget.isManualEntry)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             FormFields.buildFormField(
                               label: 'Código de lote',
-                              hint: 'Escanee o ingrese el código del lote',
+                              hint: 'Escanee o ingrese el código',
                               controller: widget.codigoLoteController,
-                              readOnly: true,
+                              readOnly: widget.isWizardRangeLocked ||
+                                  widget.isInPartialSaveMode,
                               required: false,
+                              keyboardType: TextInputType.number,
                             ),
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: widget.onScanBarcode,
+                                onPressed: (widget.isWizardRangeLocked ||
+                                        widget.isInPartialSaveMode)
+                                    ? null
+                                    : widget.onScanBarcode,
                                 icon:
                                     const Icon(Icons.qr_code_scanner, size: 16),
                                 label: const Text('Escanear código'),
@@ -834,32 +1305,79 @@ class _RegistroTabState extends State<RegistroTab> {
                           ],
                         ),
 
-                      // Campos para entrada manual
+                      // ✅ NUEVO: Campo de rango de canteros en móvil
+                      if (showWizardFields) ...[
+                        _buildCanterosRangeField(),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Casa
                       FormFields.buildDropdownField(
                         label: 'Casa',
                         hint: 'Seleccione casa',
                         options: widget.casas,
                         value: widget.selectedCasa,
-                        onChanged: widget.onCasaChanged,
+                        onChanged: (widget.isWizardRangeLocked ||
+                                widget.isInPartialSaveMode)
+                            ? null
+                            : widget.onCasaChanged,
                         required: true,
+                        readOnly: widget.isWizardRangeLocked ||
+                            widget.isInPartialSaveMode,
                       ),
                       const SizedBox(height: 12),
 
-                      FormFields.buildNumberField(
-                        label: 'Cantero',
-                        hint: 'Ingrese el cantero',
-                        controller: widget.canteroController,
-                        required: true,
-                        readOnly: !(widget.isManualEntry ||
-                            widget.codigoLoteController.text.isNotEmpty),
-                      ),
-                      const SizedBox(height: 12),
+                      // Cantero (solo si no hay wizard)
+                      if (!showWizardFields) ...[
+                        TextFormField(
+                          controller: widget.canteroController,
+                          decoration: InputDecoration(
+                            labelText: 'Cantero * (1-110)',
+                            hintText: 'Número del 1 al 110',
+                            errorText: _canteroError,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(3),
+                          ],
+                          readOnly: widget.isInPartialSaveMode ||
+                              !(widget.isManualEntry ||
+                                  widget.codigoLoteController.text.isNotEmpty),
+                          onChanged: (value) {
+                            if (value.isNotEmpty) {
+                              final numero = int.tryParse(value);
+                              if (numero == null ||
+                                  numero < 1 ||
+                                  numero > 110) {
+                                setState(() {
+                                  _canteroError =
+                                      'Debe ser un número entre 1 y 110';
+                                });
+                              } else {
+                                setState(() {
+                                  _canteroError = null;
+                                });
+                              }
+                            } else {
+                              setState(() {
+                                _canteroError = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                      ],
 
-                      // CAMPO DE VARIEDAD DINÁMICO (VERSIÓN MÓVIL)
+                      // Variedad
                       widget.isManualEntry ||
                               widget.codigoLoteController.text.isEmpty
-                          ? // MODO MANUAL: Dropdown editable
-                          FormFields.buildDropdownField(
+                          ? SearchableVariedadSelector(
                               label: 'Variedad',
                               hint: 'Seleccione variedad',
                               options: widget.variedades,
@@ -867,8 +1385,7 @@ class _RegistroTabState extends State<RegistroTab> {
                               onChanged: widget.onVariedadChanged,
                               required: true,
                             )
-                          : // MODO AUTOMÁTICO: Campo de solo lectura
-                          FormFields.buildFormField(
+                          : FormFields.buildFormField(
                               label: 'Variedad',
                               hint: 'Variedad del lote',
                               controller: TextEditingController(
@@ -879,6 +1396,7 @@ class _RegistroTabState extends State<RegistroTab> {
                             ),
                       const SizedBox(height: 12),
 
+                      // Responsable
                       FormFields.buildFormField(
                         label: 'Responsable',
                         hint: 'Responsable del cultivo',
@@ -889,7 +1407,7 @@ class _RegistroTabState extends State<RegistroTab> {
                   ),
                 ),
 
-                // Sección para datos de monitoreo (colapsable)
+                // Sección datos del monitoreo (colapsable)
                 CollapsibleCard(
                   title: 'Datos del monitoreo',
                   initiallyExpanded: _isMonitoreoExpanded,
@@ -897,7 +1415,6 @@ class _RegistroTabState extends State<RegistroTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Selección de plaga
                       FormFields.buildDropdownField(
                         label: 'Plaga',
                         hint: 'Seleccione la plaga',
@@ -908,7 +1425,55 @@ class _RegistroTabState extends State<RegistroTab> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Cantidades
+                      // Indicadores de plagas registradas (código existente simplificado)
+                      if (widget.isInPartialSaveMode &&
+                          widget.plagasRegistradas.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.purple.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 14, color: Colors.purple.shade800),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Plagas registradas:',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.purple.shade800,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ...widget.plagasRegistradas.map((registro) {
+                                final partes = registro.split('|');
+                                final texto = partes.length == 3
+                                    ? '${partes[1]} - ${partes[2]}'
+                                    : registro;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: Text(
+                                    '• $texto',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.purple.shade700),
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+                        ),
+
                       FormFields.buildFormField(
                         label: 'Cantidad observada',
                         hint: 'Calculada automáticamente',
@@ -925,10 +1490,9 @@ class _RegistroTabState extends State<RegistroTab> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Comentarios
                       FormFields.buildFormField(
                         label: 'Comentarios',
-                        hint: 'Ingrese comentarios adicionales',
+                        hint: 'Comentarios adicionales',
                         controller: widget.comentariosController,
                         maxLines: 3,
                       ),
@@ -936,7 +1500,7 @@ class _RegistroTabState extends State<RegistroTab> {
                   ),
                 ),
 
-                // Datos de muestras y niveles (colapsable)
+                // Sección muestras y niveles (colapsable)
                 CollapsibleCard(
                   title: 'Muestras y niveles',
                   initiallyExpanded: _isMuestrasExpanded,
@@ -944,59 +1508,14 @@ class _RegistroTabState extends State<RegistroTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Información sobre niveles
-                      ExpansionTile(
-                        title: Text(
-                          'Información de niveles',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: MonitoreoStyles.primaryColor,
-                          ),
-                        ),
-                        collapsedIconColor: MonitoreoStyles.primaryColor,
-                        iconColor: MonitoreoStyles.primaryColor,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blue.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Nivel 1: Entre 0 y ${widget.limiteNivel1 ?? 10}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                                Text(
-                                  'Nivel 2: Entre ${widget.limiteNivel1 != null ? widget.limiteNivel1! + 1 : 11} y ${widget.limiteNivel2 ?? 20}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                                Text(
-                                  'Nivel 3: Mayor a ${widget.limiteNivel2 ?? 20}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
                       // Muestras
-                      // Muestra 1
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: FormFields.buildNumberField(
                               label: 'Muestra 1',
-                              hint: 'Valor numérico',
+                              hint: 'Valor',
                               controller: widget.muestra1Controller,
                               onChanged: widget.onMuestra1Changed,
                             ),
@@ -1005,25 +1524,29 @@ class _RegistroTabState extends State<RegistroTab> {
                           Expanded(
                             flex: 2,
                             child: FormFields.buildDropdownField(
-                              label: 'Nivel manual 1',
+                              label: 'Nivel 1',
                               hint: 'Nivel',
                               options: nivelesMuestra,
                               value: widget.selectedNivelMuestra1,
-                              onChanged: widget.onNivelMuestra1Changed,
+                              onChanged:
+                                  widget.muestra1Controller.text.trim().isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra1Changed,
+                              readOnly:
+                                  widget.muestra1Controller.text.trim().isEmpty,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
 
-                      // Muestra 2
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: FormFields.buildNumberField(
                               label: 'Muestra 2',
-                              hint: 'Valor numérico',
+                              hint: 'Valor',
                               controller: widget.muestra2Controller,
                               onChanged: widget.onMuestra2Changed,
                             ),
@@ -1032,25 +1555,29 @@ class _RegistroTabState extends State<RegistroTab> {
                           Expanded(
                             flex: 2,
                             child: FormFields.buildDropdownField(
-                              label: 'Nivel manual 2',
+                              label: 'Nivel 2',
                               hint: 'Nivel',
                               options: nivelesMuestra,
                               value: widget.selectedNivelMuestra2,
-                              onChanged: widget.onNivelMuestra2Changed,
+                              onChanged:
+                                  widget.muestra2Controller.text.trim().isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra2Changed,
+                              readOnly:
+                                  widget.muestra2Controller.text.trim().isEmpty,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
 
-                      // Muestra 3
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: FormFields.buildNumberField(
                               label: 'Muestra 3',
-                              hint: 'Valor numérico',
+                              hint: 'Valor',
                               controller: widget.muestra3Controller,
                               onChanged: widget.onMuestra3Changed,
                             ),
@@ -1059,17 +1586,22 @@ class _RegistroTabState extends State<RegistroTab> {
                           Expanded(
                             flex: 2,
                             child: FormFields.buildDropdownField(
-                              label: 'Nivel manual 3',
+                              label: 'Nivel 3',
                               hint: 'Nivel',
                               options: nivelesMuestra,
                               value: widget.selectedNivelMuestra3,
-                              onChanged: widget.onNivelMuestra3Changed,
+                              onChanged:
+                                  widget.muestra3Controller.text.trim().isEmpty
+                                      ? null
+                                      : widget.onNivelMuestra3Changed,
+                              readOnly:
+                                  widget.muestra3Controller.text.trim().isEmpty,
                             ),
                           ),
                         ],
                       ),
 
-                      // Información sobre niveles calculados automáticamente
+                      // Niveles calculados
                       if (widget.muestra1Controller.text.isNotEmpty ||
                           widget.muestra2Controller.text.isNotEmpty ||
                           widget.muestra3Controller.text.isNotEmpty)
@@ -1085,29 +1617,26 @@ class _RegistroTabState extends State<RegistroTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Niveles calculados automáticamente:',
+                                'Niveles automáticos:',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: MonitoreoStyles.accentColor,
                                   fontSize: 13,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               if (widget.muestra1Controller.text.isNotEmpty)
                                 Text(
-                                  'Muestra 1: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra1Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                                    'M1: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra1Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                    style: const TextStyle(fontSize: 12)),
                               if (widget.muestra2Controller.text.isNotEmpty)
                                 Text(
-                                  'Muestra 2: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra2Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                                    'M2: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra2Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                    style: const TextStyle(fontSize: 12)),
                               if (widget.muestra3Controller.text.isNotEmpty)
                                 Text(
-                                  'Muestra 3: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra3Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                                    'M3: Nivel ${NivelCalculator.calcularNivelAutomatico(int.tryParse(widget.muestra3Controller.text), widget.limiteNivel1, widget.limiteNivel2)}',
+                                    style: const TextStyle(fontSize: 12)),
                             ],
                           ),
                         ),
@@ -1115,7 +1644,7 @@ class _RegistroTabState extends State<RegistroTab> {
                   ),
                 ),
 
-                // Botones de acción (fijos en la parte inferior para móvil)
+                // Botones de acción
                 Card(
                   elevation: 1,
                   margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1144,16 +1673,13 @@ class _RegistroTabState extends State<RegistroTab> {
                             child: Text(
                               widget.isCreatingNew ? 'Guardar' : 'Actualizar',
                               style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            // Botón parcial
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: widget.isSubmitting
@@ -1169,13 +1695,12 @@ class _RegistroTabState extends State<RegistroTab> {
                                   ),
                                   disabledBackgroundColor: Colors.grey.shade400,
                                 ),
-                                child: const Text('Guardar parcial'),
+                                child: Text(widget.isEditingExistingPartial
+                                    ? 'Editar parcial'
+                                    : 'Guardar parcial'),
                               ),
                             ),
-
                             const SizedBox(width: 12),
-
-                            // Botón cancelar
                             Expanded(
                               child: OutlinedButton(
                                 onPressed: widget.onCancel,

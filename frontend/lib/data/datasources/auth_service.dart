@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
-import '../../core/config/flavor_config.dart'; // Mantenemos la misma ruta de importación
+import '../../core/config/flavor_config.dart';
 import '../models/user_model.dart';
 import '../../presentation/pages/auth/login_screen.dart';
 
@@ -16,6 +16,8 @@ class AuthService extends ChangeNotifier {
   Timer? _warningTimer;
   Timer? _loginScreenTimer;
 
+  BuildContext? _currentContext;
+
   // Configuración de tiempos de inactividad
   static const inactivityTimeout = Duration(minutes: 30);
   static const warningBeforeTimeout = Duration(seconds: 30);
@@ -23,10 +25,7 @@ class AuthService extends ChangeNotifier {
 
   DateTime _lastActivityTime = DateTime.now();
   bool _isShowingWarning = false;
-  // Añadir una variable para throttling
   DateTime _lastResetTime = DateTime.now();
-
-  // Añadir un flag para controlar el estado de procesamiento de login
   bool _isProcessingLogin = false;
 
   UserModel? get currentUser => _currentUser;
@@ -34,7 +33,77 @@ class AuthService extends ChangeNotifier {
 
   bool get isMonitoreador => _currentUser?.isMonitoreador ?? false;
   bool get isAdmin => _currentUser?.isAdmin ?? false;
-  bool get mustFilterByUser => isMonitoreador && !isAdmin;
+
+  /// Lógica para filtrado por usuario que considera si es admin en móvil
+  bool get mustFilterByUser {
+    // Si no es monitoreador, no necesita filtro
+    if (!isMonitoreador) return false;
+
+    // Si es admin, verificar si está en móvil
+    if (isAdmin) {
+      // Si es admin en móvil, NO filtrar (puede ver todos los registros)
+      if (_isMobileDevice()) {
+        return false;
+      }
+      // Si es admin en desktop, tampoco filtrar
+      return false;
+    }
+
+    // Solo los monitoreadores no-admin necesitan filtro
+    return true;
+  }
+
+  /// Indica si el usuario debe ver solo datos de ayer y hoy
+  bool get mustFilterByDate {
+    // Solo los monitoreadores tienen filtro de fecha
+    return isMonitoreador;
+  }
+
+  /// Verificar si una fecha está permitida para el usuario actual
+  bool isDateAllowed(DateTime? date) {
+    if (!mustFilterByDate) return true;
+    if (date == null) return false;
+
+    // Convertir fecha UTC a hora local antes de comparar
+    final localDate = date.toLocal();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateOnly = DateTime(localDate.year, localDate.month, localDate.day);
+
+    debugPrint(
+        '📅 isDateAllowed: fecha=$date, localDate=$localDate, today=$today, dateOnly=$dateOnly');
+
+    return dateOnly.isAtSameMomentAs(yesterday) ||
+        dateOnly.isAtSameMomentAs(today) ||
+        dateOnly.isAfter(yesterday); // Incluir hoy y hacia adelante
+  }
+
+  /// Obtener descripción del filtro activo (para mostrar en UI)
+  String getFilterDescription() {
+    if (isAdmin) {
+      return _isMobileDevice()
+          ? 'Admin - Vista móvil completa'
+          : 'Admin - Portal completo';
+    } else if (isMonitoreador) {
+      return 'Mis registros de ayer y hoy';
+    } else {
+      return 'Vista estándar';
+    }
+  }
+
+  /// Detectar si es dispositivo móvil
+  bool _isMobileDevice() {
+    if (_currentContext == null) return false;
+    final screenWidth = MediaQuery.of(_currentContext!).size.width;
+    return screenWidth < 1024;
+  }
+
+  /// Actualizar contexto para detección de dispositivo
+  void updateContext(BuildContext context) {
+    _currentContext = context;
+  }
 
   // Variable global para almacenar el contexto de la aplicación
   static GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -108,17 +177,16 @@ class AuthService extends ChangeNotifier {
 
       if (countdown <= 0) {
         timer.cancel();
-        Navigator.of(context, rootNavigator: true).pop(); // Cerrar diálogo
-        _forceLogout(); // Cerrar sesión
+        Navigator.of(context, rootNavigator: true).pop();
+        _forceLogout();
       }
     });
 
-    // Usar el context del navigator global
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => WillPopScope(
-        onWillPop: () async => false, // Prevenir cierre con botón atrás
+        onWillPop: () async => false,
         child: AlertDialog(
           title: const Text('Advertencia de cierre de sesión'),
           content: Column(
@@ -219,8 +287,9 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // Para pantalla de login
   void startLoginScreenTimer(BuildContext context) {
+    updateContext(context);
+
     _loginScreenTimer?.cancel();
 
     _loginScreenTimer = Timer(loginScreenTimeout, () {
@@ -231,11 +300,11 @@ class AuthService extends ChangeNotifier {
   }
 
   void resetLoginScreenTimer(BuildContext context) {
+    updateContext(context);
     startLoginScreenTimer(context);
   }
 
   void _closeApp() {
-    // Cerrar la aplicación
     try {
       SystemNavigator.pop();
     } catch (e) {
@@ -245,13 +314,11 @@ class AuthService extends ChangeNotifier {
 
   void resetInactivityTimer() {
     if (isAuthenticated) {
-      // Implementar throttling - limitar a una actualización cada 5 segundos máximo
       final now = DateTime.now();
       if (now.difference(_lastResetTime) > const Duration(seconds: 5)) {
         _lastActivityTime = now;
         _lastResetTime = now;
 
-        // Si hay diálogo de advertencia abierto, cerrarlo
         if (_isShowingWarning && navigatorKey.currentContext != null) {
           _warningTimer?.cancel();
           _isShowingWarning = false;
@@ -264,7 +331,6 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> login(String username, String password) async {
-    // Evitar múltiples intentos de login simultáneos
     if (_isProcessingLogin) {
       print(
           'Ya hay un proceso de login en curso, ignorando la nueva solicitud');
@@ -282,11 +348,9 @@ class AuthService extends ChangeNotifier {
       if (response.statusCode == 200 && response.data['success']) {
         final userData = response.data['user'];
 
-        // Asignar rol basado en pmus_funcion
         final int funcion = userData['pmus_funcion'] ?? 1;
         List<String> roles = [];
 
-        // Asignar roles basados en el campo funcion
         if (funcion == 1) {
           roles = ['admin'];
         } else if (funcion == 4) {
@@ -295,30 +359,25 @@ class AuthService extends ChangeNotifier {
           roles = ['usuario'];
         }
 
-        // Crear el modelo de usuario con los roles asignados
         _currentUser = UserModel(
           id: userData['pmus_id'] ?? 0,
           codigo: userData['pmus_codigo'] ?? 0,
           username: userData['pmus_usuario'] ?? '',
-          name: userData['pmus_usuario'] ??
-              '', // Usar usuario como nombre si no hay otro campo
+          name: userData['pmus_usuario'] ?? '',
           funcion: funcion,
           roles: roles,
         );
 
-        // Actualizar la configuración si se incluye en la respuesta
         if (response.data.containsKey('config')) {
           await _apiConfig.updateFromServerResponse(response.data['config']);
         }
 
         _lastActivityTime = DateTime.now();
-        _loginScreenTimer?.cancel(); // Cancelar el timer de login screen
+        _loginScreenTimer?.cancel();
         _startInactivityTimer(null);
 
-        // Notificar a los listeners después de establecer el usuario
         notifyListeners();
 
-        // Pequeña pausa para asegurar que el cambio de estado se propague
         await Future.delayed(const Duration(milliseconds: 100));
 
         _isProcessingLogin = false;
@@ -336,33 +395,46 @@ class AuthService extends ChangeNotifier {
 
   void logout() {
     _currentUser = null;
+    _currentContext = null;
     _inactivityTimer?.cancel();
     _warningTimer?.cancel();
     _isShowingWarning = false;
     _inactivityTimer = null;
     _warningTimer = null;
 
-    // Asegurar que los listeners se notifiquen del cambio
     notifyListeners();
   }
 
   void checkActivity(BuildContext context) {
+    updateContext(context);
+
     if (isAuthenticated) {
       resetInactivityTimer();
     } else {
-      // Si está en la pantalla de login
       resetLoginScreenTimer(context);
     }
   }
 
-  // Método para obtener el ID del usuario actual o un valor por defecto
   int getCurrentUserId() {
     return _currentUser?.id ?? 0;
   }
 
-  // Método para verificar si el usuario actual creó un monitoreo
   bool isOwnerOfMonitoreo(int createdById) {
     return getCurrentUserId() == createdById;
+  }
+
+  String getUserAccessType() {
+    if (!isAuthenticated) return 'Sin autenticar';
+
+    if (isAdmin && _isMobileDevice()) {
+      return 'Admin (Móvil/Tablet) - Vista de Monitoreo completa';
+    } else if (isAdmin) {
+      return 'Admin (Desktop) - Portal completo';
+    } else if (isMonitoreador) {
+      return 'Monitoreador - Solo mis datos (ayer y hoy)';
+    } else {
+      return 'Usuario estándar';
+    }
   }
 
   @override
@@ -371,6 +443,7 @@ class AuthService extends ChangeNotifier {
     _warningTimer?.cancel();
     _loginScreenTimer?.cancel();
     _apiConfig.removeListener(_updateDioBaseUrl);
+    _currentContext = null;
     super.dispose();
   }
 }

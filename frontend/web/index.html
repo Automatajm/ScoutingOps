@@ -1,6 +1,73 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
+
+<script>
+  // Reset de Emergencia - Limpia SW, Cache, IndexedDB, Storage
+  window.emergencyReset = async function() {
+    try {
+      console.log('🔄 Iniciando reset de emergencia...');
+      
+      // 1. Service Workers
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) await reg.unregister();
+        console.log('✅ Service Workers desregistrados:', regs.length);
+      }
+      
+      // 2. Caches
+      if ('caches' in window) {
+        const names = await caches.keys();
+        for (const name of names) await caches.delete(name);
+        console.log('✅ Caches eliminados:', names.length);
+      }
+      
+      // 3. IndexedDB
+      if (indexedDB.databases) {
+        const dbs = await indexedDB.databases();
+        for (const db of dbs) {
+          if (db.name) indexedDB.deleteDatabase(db.name);
+        }
+        console.log('✅ IndexedDB eliminadas:', dbs.length);
+      }
+      
+      // 4. Storage
+      localStorage.clear();
+      sessionStorage.clear();
+      console.log('✅ Storage limpiado');
+      
+      // 5. Recargar
+      console.log('🎉 Reset completo. Recargando...');
+      setTimeout(() => {
+        window.location.href = window.location.origin + '?reset=' + Date.now();
+      }, 1000);
+      
+      return true;
+    } catch (e) {
+      console.error('❌ Error:', e);
+      window.location.reload();
+      return false;
+    }
+  };
+  
+  // Atajo: Ctrl+Shift+R
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'R') {
+      e.preventDefault();
+      if (confirm('¿Ejecutar reset de emergencia?\n\n⚠️ Se perderán los datos no sincronizados.')) {
+        window.emergencyReset();
+      }
+    }
+  });
+  
+  console.log('ℹ️ Reset de emergencia: Ctrl+Shift+R');
+</script>
+  
+  <!-- =====
+  <meta name="dart-flavor" content="production">
+  <meta name="dart-flavor" content="development">
+  ===== -->
   <!-- ===== META TAGS BÁSICOS ===== -->
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
@@ -176,8 +243,10 @@
   <script>
     (function() {
       'use strict';
-      
-      // ===== DETECCIÓN DE ENTORNO =====
+
+
+
+// ===== DETECCIÓN DE ENTORNO =====
       const isProduction = (
         (window.location.hostname !== 'localhost' && 
          window.location.hostname !== '127.0.0.1' &&
@@ -186,7 +255,19 @@
          window.location.protocol === 'https:') ||
         (document.querySelector('meta[name="dart-flavor"]')?.content === 'production')
       );
-      
+
+     /*
+       // ===== DETECCIÓN DE ENTORNO =====
+      const isProduction = false; // ✅ FORZAR DESARROLLO
+      const ORIGINAL_isProduction = (
+        (window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1' &&
+         !window.location.hostname.includes('192.168') &&
+         !window.location.hostname.includes('10.0.0') &&
+         window.location.protocol === 'https:') ||
+        (document.querySelector('meta[name="dart-flavor"]')?.content === 'production')
+      );
+      */
       const isStaging = window.location.hostname.includes('staging') ||
                        window.location.hostname.includes('test') ||
                        (document.querySelector('meta[name="dart-flavor"]')?.content === 'staging');
@@ -1040,12 +1121,12 @@
         Logger.network('Fallback config usando protocolo', protocol);
         
         const config = {
-          apiUrl: `${protocol}://10.0.0.19:8000/api`,
-          baseUrl: `${protocol}://10.0.0.19:8000`,
-          detectedIP: '10.0.0.19',
+          apiUrl: `${protocol}://drpestcontrol:8000/api`,
+          baseUrl: `${protocol}://drpestcontrol:8000`,
+          detectedIP: 'drpestcontrol',
           detectionStatus: 'fallback',
           availableUrls: [
-            `${protocol}://10.0.0.19:8000`, 
+            `${protocol}://drpestcontrol:8000`, 
             `${protocol}://localhost:8000`
           ],
           timestamp: new Date().toISOString(),
@@ -1144,7 +1225,7 @@
 
     // Nueva función para prueba manual
     window.testDirectAPI = async () => {
-      const testUrl = 'https://10.0.0.19:8000';
+      const testUrl = 'https://drpestcontrol:8000';
       Logger.network('Probando conexión directa a', testUrl);
       
       try {

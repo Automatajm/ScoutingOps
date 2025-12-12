@@ -12,13 +12,54 @@ class RoutesManager {
   static const String home = '/home';
   static const String monitoreo = '/monitoreo';
 
+  /// ✅ NUEVO: Detectar si es dispositivo móvil basado en ancho de pantalla
+  static bool _isMobileDevice(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    return screenWidth < 600; // Menos de 600px se considera móvil
+  }
+
+  /// ✅ NUEVO: Determinar la pantalla apropiada según rol y dispositivo
+  static Widget _getAppropriateScreen(
+      BuildContext context, AuthService authService) {
+    final bool isMobile = _isMobileDevice(context);
+
+    // Si es admin en móvil, enviarlo a MonitoreoScreen SIN filtros
+    if (authService.isAdmin && isMobile) {
+      return Scaffold(
+        body: MonitoreoScreen(
+          onEditModeChanged: (_) {}, // Callback vacío
+        ),
+      );
+    }
+
+    // Si es monitoreador (no admin), siempre a MonitoreoScreen CON filtros
+    if (authService.isMonitoreador && !authService.isAdmin) {
+      return Scaffold(
+        body: MonitoreoScreen(
+          onEditModeChanged: (_) {}, // Callback vacío
+        ),
+      );
+    }
+
+    // Para admins en desktop/tablet, ir a HomeScreen
+    return HomeScreen(
+      nombreUsuario: authService.currentUser?.username ?? '',
+      empresa: 'Costa Farms LLC',
+    );
+  }
+
   /// Obtener rutas nombradas para la aplicación
   static Map<String, WidgetBuilder> getRoutes() {
     return {
       login: (context) => const LoginScreen(),
       home: (context) => _protectedRoute(
-            const HomeScreen(nombreUsuario: '', empresa: 'Costa Farms LLC'),
-            canAccessHome,
+            // ✅ MODIFICADO: Usar función que decide la pantalla apropiada
+            Builder(builder: (context) {
+              final authService =
+                  Provider.of<AuthService>(context, listen: false);
+              return _getAppropriateScreen(context, authService);
+            }),
+            canAccessApp, // ✅ RENOMBRADO: de canAccessHome a canAccessApp
             context,
           ),
       monitoreo: (context) => Scaffold(
@@ -38,8 +79,8 @@ class RoutesManager {
     return login;
   }
 
-  /// Función para verificar si un usuario puede acceder a la pantalla Home
-  static bool canAccessHome(BuildContext context) {
+  /// ✅ MODIFICADO: Función para verificar si un usuario puede acceder a la app
+  static bool canAccessApp(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
 
     // Si el usuario no está autenticado, no puede acceder
@@ -47,11 +88,8 @@ class RoutesManager {
       return false;
     }
 
-    // Si el usuario es monitoreador y no es admin, no puede acceder al Home
-    if (authService.isMonitoreador && !authService.isAdmin) {
-      return false;
-    }
-
+    // ✅ CAMBIO IMPORTANTE: Todos los usuarios autenticados pueden acceder
+    // La diferencia será QUÉ pantalla ven (Home vs Monitoreo)
     return true;
   }
 
@@ -69,16 +107,6 @@ class RoutesManager {
 
     // Luego verificar acceso específico
     if (!accessCheck(context)) {
-      // Si no tiene acceso, redirigir a la pantalla apropiada
-      if (authService.isMonitoreador) {
-        // Envolver en Scaffold para evitar problemas de contexto
-        return Scaffold(
-          body: MonitoreoScreen(
-            onEditModeChanged: (_) {}, // Callback vacío
-          ),
-        );
-      }
-
       return const LoginScreen();
     }
 
@@ -100,40 +128,19 @@ class RoutesManager {
         // Manejar las rutas específicas
         switch (settings.name) {
           case login:
-            // Si ya está autenticado y trata de ir a login, redirigir según rol
+            // Si ya está autenticado y trata de ir a login, redirigir según rol y dispositivo
             if (authService.isAuthenticated) {
-              // Redirigir basado en el rol
-              if (authService.isMonitoreador && !authService.isAdmin) {
-                return Scaffold(
-                  body: MonitoreoScreen(
-                    onEditModeChanged: (_) {}, // Callback vacío
-                  ),
-                );
-              } else {
-                return HomeScreen(
-                  nombreUsuario: authService.currentUser?.username ?? '',
-                  empresa: 'Costa Farms LLC',
-                );
-              }
+              return _getAppropriateScreen(context, authService);
             }
             return const LoginScreen();
+
           case home:
             if (!authService.isAuthenticated) {
               return const LoginScreen();
             }
+            // ✅ MODIFICADO: Usar la función que decide la pantalla apropiada
+            return _getAppropriateScreen(context, authService);
 
-            if (authService.isMonitoreador && !authService.isAdmin) {
-              // Los monitoreadores no pueden acceder al Home
-              return Scaffold(
-                body: MonitoreoScreen(
-                  onEditModeChanged: (_) {}, // Callback vacío
-                ),
-              );
-            }
-            return HomeScreen(
-              nombreUsuario: authService.currentUser?.username ?? '',
-              empresa: 'Costa Farms LLC',
-            );
           case monitoreo:
             if (!authService.isAuthenticated) {
               return const LoginScreen();
@@ -143,22 +150,14 @@ class RoutesManager {
                 onEditModeChanged: (_) {}, // Callback vacío
               ),
             );
+
           default:
             // Ruta por defecto
             if (!authService.isAuthenticated) {
               return const LoginScreen();
             }
-
-            return authService.isMonitoreador && !authService.isAdmin
-                ? Scaffold(
-                    body: MonitoreoScreen(
-                      onEditModeChanged: (_) {}, // Callback vacío
-                    ),
-                  )
-                : HomeScreen(
-                    nombreUsuario: authService.currentUser?.username ?? '',
-                    empresa: 'Costa Farms LLC',
-                  );
+            // ✅ MODIFICADO: Usar la función que decide la pantalla apropiada
+            return _getAppropriateScreen(context, authService);
         }
       },
     );

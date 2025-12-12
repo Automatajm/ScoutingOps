@@ -1,27 +1,18 @@
-# Dockerfile simple para Flutter Web
 FROM node:18-alpine
 
-# Instalar dependencias
-RUN apk add --no-cache wget curl && \
-    npm install -g http-server@14.1.1
+# Instala dependencias necesarias para compilar y ejecutar npm global installs
+RUN apk add --no-cache bash curl make gcc g++ python3 libc6-compat
 
-# Crear usuario
-RUN addgroup -g 1001 -S flutter && \
-    adduser -S flutteruser -u 1001
+# Ahora instala http-server globalmente con permisos adecuados
+RUN npm install -g http-server --unsafe-perm=true --allow-root
 
-# Configurar app
 WORKDIR /app
-COPY build/web/ /app/web/
 
-# Copiar certificados desde frontend/
-COPY *.pem /app/certs/
-RUN ls -la /app/certs/
+COPY frontend/build/web/ .
 
-# Permisos
-RUN chown -R flutteruser:flutter /app
-USER flutteruser
+COPY cert.pem /cert.pem
+COPY key.pem /key.pem
 
 EXPOSE 8080
 
-# Comando simple
-CMD ["sh", "-c", "if [ -f /app/certs/cert.pem ]; then http-server /app/web -p 8080 -S -C /app/certs/cert.pem -K /app/certs/key.pem -a 0.0.0.0 --cors; else http-server /app/web -p 8080 -a 0.0.0.0 --cors; fi"]
+CMD ["http-server", "-p", "8080", "-S", "-C", "/cert.pem", "-K", "/key.pem", "-a", "0.0.0.0"]

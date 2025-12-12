@@ -1,25 +1,63 @@
 services:
-
-  # PGAdmin4
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pest_control_pgadmin
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        FLAVOR: ${FLAVOR}
+    container_name: pest_control_frontend
+    restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@pestcontrol.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      API_URL: https://pest_control_backend:${BACKEND_PORT}
+      NODE_ENV: ${NODE_ENV}
     ports:
-      - "5050:80"
-    depends_on:
-      - postgres
+      - "${FRONTEND_PORT}:8080"
+    volumes:
+      - ./cert.pem:/cert.pem:ro
+      - ./key.pem:/key.pem:ro
     networks:
       - pest_network
-    restart: unless-stopped
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - backend
 
-  # Base de datos PostgreSQL 17
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: pest_control_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      ENVIRONMENT: production
+      FLAVOR: production
+      PORT: ${BACKEND_PORT}
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT}
+      DB_NAME: pest_control
+      DB_USER: pestuser
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      SSL_ENABLED: ${SSL_ENABLED}
+      USE_HTTPS: ${USE_HTTPS}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL}
+      CLIENT: drpestcontrol
+    ports:
+      - "${BACKEND_PORT}:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/uploads:/app/uploads
+      - ./cert.pem:/cert.pem:ro
+      - ./key.pem:/key.pem:ro
+      - ./.env.production:/app/.env:ro
+    networks:
+      - pest_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:17-alpine
     container_name: pest_control_db
@@ -27,12 +65,14 @@ services:
     environment:
       POSTGRES_DB: pest_control
       POSTGRES_USER: pestuser
-      POSTGRES_PASSWORD: pestpass123
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+      - ./backend/sql/init:/docker-entrypoint-initdb.d:ro
     networks:
       - pest_network
     healthcheck:
@@ -41,78 +81,36 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend Node.js con SSL
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: pest_control_backend
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pest_control_pgadmin
+    profiles: ["dev", "tools"]
     restart: unless-stopped
     environment:
-      ENVIRONMENT: production
-      PORT: 8000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: pest_control
-      DB_USER: pestuser
-      DB_PASSWORD: pestpass123
-      DB_SSL: false
-      DB_REQUIRE_SSL: false
-      JWT_SECRET: tu_jwt_secret_super_seguro_2024
-      SSL_ENABLED: true
-      USE_HTTPS: true
-      LOG_QUERIES: false
-      LOG_ERRORS: true
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
+      PGADMIN_CONFIG_WTF_CSRF_ENABLED: 'False'
+      PGADMIN_CONFIG_WTF_CSRF_TIME_LIMIT: 'None'
     ports:
-      - "8000:8000"
+      - "${PGADMIN_PORT}:80"
     volumes:
-      - ./backend/logs:/app/logs
-    networks:
-      - pest_network
+      - pgadmin_data:/var/lib/pgadmin
+      - ./backups:/var/lib/pgadmin/backups:rw
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-
-  # Frontend Flutter Web con SSL
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: pest_control_frontend
-    restart: unless-stopped
-    environment:
-      - FLUTTER_WEB=true
-      - API_BASE_URL=https://pest_control_backend:8000/api
-      - ENVIRONMENT=production
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./frontend/build/web:/app/web:ro
-      - ./backend/certs:/app/certs:ro
     networks:
       - pest_network
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   postgres_data:
     driver: local
   pgadmin_data:
+    driver: local
 
 networks:
   pest_network:
     driver: bridge
-
-  

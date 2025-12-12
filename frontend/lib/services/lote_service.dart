@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/config/flavor_config.dart';
 import '../models/lote_model.dart';
+import '../data/database/app_database.dart';
 
 // Clase para el resultado de la importación
 class ImportResult {
@@ -25,21 +26,102 @@ class LoteService {
   factory LoteService() => _instance;
   LoteService._internal();
 
+  // Referencia a la base de datos SQLite (se inyecta después de inicializar)
+  AppDatabase? _database;
+
+  // Setter para inyectar la base de datos
+  void setDatabase(AppDatabase db) {
+    _database = db;
+    debugPrint('📦 LoteService: Base de datos SQLite configurada');
+  }
+
   // Getter para obtener la URL desde la configuración centralizada
   String get lotesUrl => ApiConfig().lotesUrl;
   String get variedadesUrl => '${ApiConfig().lotesUrl}/variedades/lista';
 
-  // Método para obtener las variedades desde la API - MODIFICADO para manejar correctamente el código
+  // ============================================================
+  // MÉTODOS CON SOPORTE OFFLINE
+  // ============================================================
+
+  /// Obtener variedades - Primero intenta SQLite, luego API
   Future<Map<int, Map<String, String>>> getVariedades() async {
+    // 1. Intentar obtener de SQLite primero (respuesta instantánea)
+    final localData = await _getVariedadesFromSQLite();
+    if (localData.isNotEmpty) {
+      debugPrint('📦 Variedades cargadas desde SQLite: ${localData.length}');
+
+      // Intentar actualizar en background si hay conexión
+      _refreshVariedadesInBackground();
+
+      return localData;
+    }
+
+    // 2. Si no hay datos locales, intentar API
+    debugPrint('🌐 No hay variedades locales, consultando API...');
+    return await _getVariedadesFromAPI();
+  }
+
+  /// Obtener variedades desde SQLite
+  Future<Map<int, Map<String, String>>> _getVariedadesFromSQLite() async {
+    if (_database == null) {
+      debugPrint('⚠️ Base de datos no configurada en LoteService');
+      return {};
+    }
+
+    try {
+      // getCatalogo ahora retorna Map<String, dynamic>? en lugar de CatalogosData?
+      final catalogoMap = await _database!.getCatalogo('variedades');
+      if (catalogoMap != null) {
+        final dataString = catalogoMap['data'] as String?;
+        if (dataString != null) {
+          final List<dynamic> variedadesData = json.decode(dataString);
+          final Map<int, Map<String, String>> variedadesMap = {};
+
+          for (var variedad in variedadesData) {
+            final id = variedad['id'];
+            final descripcion = variedad['descripcion']?.toString() ?? '';
+            final codigo = variedad['codigo']?.toString() ?? '';
+
+            if (id != null) {
+              variedadesMap[id is int ? id : int.tryParse(id.toString()) ?? 0] =
+                  {
+                'descripcion': descripcion,
+                'codigo': codigo,
+              };
+            }
+          }
+
+          return variedadesMap;
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error leyendo variedades de SQLite: $e');
+    }
+
+    return {};
+  }
+
+  /// Actualizar variedades en background
+  void _refreshVariedadesInBackground() {
+    Future.microtask(() async {
+      try {
+        await _getVariedadesFromAPI();
+      } catch (e) {
+        // Silencioso - no importa si falla el refresh
+      }
+    });
+  }
+
+  /// Obtener variedades desde API (método original)
+  Future<Map<int, Map<String, String>>> _getVariedadesFromAPI() async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint(
             "Solicitando variedades a: $variedadesUrl (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response = await http
             .get(Uri.parse(variedadesUrl))
             .timeout(const Duration(seconds: 10));
@@ -51,12 +133,9 @@ class LoteService {
 
           if (data['success'] == true && data['data'] != null) {
             final List<dynamic> variedadesData = data['data'];
-
-            // Convertir la lista a un mapa de id -> {descripcion, codigo}
             final Map<int, Map<String, String>> variedadesMap = {};
 
             for (var variedad in variedadesData) {
-              // Extraer valores usando las claves correctas
               final id = variedad['id'];
               final descripcion = variedad['descripcion'] as String;
               final codigo = variedad['codigo'] as String;
@@ -69,36 +148,30 @@ class LoteService {
               }
             }
 
-            debugPrint("Variedades cargadas: ${variedadesMap.length}");
+            debugPrint(
+                "Variedades cargadas desde API: ${variedadesMap.length}");
             return variedadesMap;
-          } else {
-            debugPrint("Error en respuesta: ${data['message']}");
-            if (attempt == maxRetries) {
-              return _getVariedadesPredefinidas();
-            }
-          }
-        } else {
-          debugPrint("Error de API: ${response.statusCode}, ${response.body}");
-          if (attempt == maxRetries) {
-            return _getVariedadesPredefinidas();
           }
         }
 
-        // Reintento con espera exponencial
-        print(
-            'Reintentando obtener variedades en ${retryDelay / 1000} segundos...');
+        if (attempt == maxRetries) {
+          return _getVariedadesPredefinidas();
+        }
+
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       } catch (e) {
         debugPrint("Excepción obteniendo variedades (intento $attempt): $e");
 
         if (attempt == maxRetries) {
+          // Último intento: usar datos locales o predefinidos
+          final localData = await _getVariedadesFromSQLite();
+          if (localData.isNotEmpty) {
+            return localData;
+          }
           return _getVariedadesPredefinidas();
         }
 
-        // Reintento con espera exponencial
-        print(
-            'Reintentando obtener variedades en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -107,7 +180,6 @@ class LoteService {
     return _getVariedadesPredefinidas();
   }
 
-  // Método para obtener variedades predeterminadas en caso de error - MODIFICADO
   Map<int, Map<String, String>> _getVariedadesPredefinidas() {
     debugPrint("Usando variedades predefinidas como fallback");
     return {
@@ -118,22 +190,121 @@ class LoteService {
     };
   }
 
-  // Obtener todos los lotes con filtros opcionales - MODIFICADO para usar código de variedad
+  // ============================================================
+  // LOTES - CON SOPORTE OFFLINE
+  // ============================================================
+
+  /// Obtener todos los lotes - Primero SQLite, luego API
   Future<List<Lote>> getLotes({
-    String? codigoVariedad, // Cambiado de variedad a codigoVariedad
+    String? codigoVariedad,
+    String? estatus,
+    String? busqueda,
+  }) async {
+    // 1. Intentar obtener de SQLite primero
+    final localLotes = await _getLotesFromSQLite(
+      codigoVariedad: codigoVariedad,
+      estatus: estatus,
+      busqueda: busqueda,
+    );
+
+    if (localLotes.isNotEmpty) {
+      debugPrint('📦 Lotes cargados desde SQLite: ${localLotes.length}');
+
+      // Intentar actualizar en background
+      _refreshLotesInBackground();
+
+      return localLotes;
+    }
+
+    // 2. Si no hay datos locales, intentar API
+    debugPrint('🌐 No hay lotes locales, consultando API...');
+    return await _getLotesFromAPI(
+      codigoVariedad: codigoVariedad,
+      estatus: estatus,
+      busqueda: busqueda,
+    );
+  }
+
+  /// Obtener lotes desde SQLite
+  Future<List<Lote>> _getLotesFromSQLite({
+    String? codigoVariedad,
+    String? estatus,
+    String? busqueda,
+  }) async {
+    if (_database == null) {
+      debugPrint('⚠️ Base de datos no configurada en LoteService');
+      return [];
+    }
+
+    try {
+      // getCatalogo ahora retorna Map<String, dynamic>? en lugar de CatalogosData?
+      final catalogoMap = await _database!.getCatalogo('lotes');
+      if (catalogoMap != null) {
+        final dataString = catalogoMap['data'] as String?;
+        if (dataString != null) {
+          final List<dynamic> lotesData = json.decode(dataString);
+          List<Lote> lotes =
+              lotesData.map((loteJson) => Lote.fromJson(loteJson)).toList();
+
+          // Aplicar filtros localmente
+          if (codigoVariedad != null && codigoVariedad != 'Todos') {
+            lotes = lotes
+                .where((l) => l.pmlt_variedad?.toString() == codigoVariedad)
+                .toList();
+          }
+
+          if (estatus != null && estatus != 'Todos') {
+            lotes = lotes
+                .where((l) => l.pmlt_estatus?.toString() == estatus)
+                .toList();
+          }
+
+          if (busqueda != null && busqueda.isNotEmpty) {
+            final searchLower = busqueda.toLowerCase();
+            lotes = lotes
+                .where((l) =>
+                    (l.pmlt_codigo?.toLowerCase().contains(searchLower) ??
+                        false) ||
+                    (l.pmlt_codigo?.toLowerCase().contains(searchLower) ??
+                        false))
+                .toList();
+          }
+
+          return lotes;
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error leyendo lotes de SQLite: $e');
+    }
+
+    return [];
+  }
+
+  /// Actualizar lotes en background
+  void _refreshLotesInBackground() {
+    Future.microtask(() async {
+      try {
+        await _getLotesFromAPI();
+      } catch (e) {
+        // Silencioso
+      }
+    });
+  }
+
+  /// Obtener lotes desde API
+  Future<List<Lote>> _getLotesFromAPI({
+    String? codigoVariedad,
     String? estatus,
     String? busqueda,
   }) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Construir parámetros de consulta
         final queryParams = <String, String>{};
         if (codigoVariedad != null && codigoVariedad != 'Todos') {
-          queryParams['codigo_variedad'] =
-              codigoVariedad; // Cambiado de variedad a codigo_variedad
+          queryParams['codigo_variedad'] = codigoVariedad;
         }
         if (estatus != null && estatus != 'Todos') {
           queryParams['estatus'] = estatus;
@@ -142,12 +313,9 @@ class LoteService {
           queryParams['busqueda'] = busqueda;
         }
 
-        // Crear URI con parámetros
         final uri = Uri.parse(lotesUrl).replace(queryParameters: queryParams);
-
         debugPrint("Solicitando lotes a: $uri (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response =
             await http.get(uri).timeout(const Duration(seconds: 10));
 
@@ -158,7 +326,7 @@ class LoteService {
             final lotes = (data['data'] as List)
                 .map((loteJson) => Lote.fromJson(loteJson))
                 .toList();
-            debugPrint("Lotes cargados: ${lotes.length}");
+            debugPrint("Lotes cargados desde API: ${lotes.length}");
             return lotes;
           } else {
             throw Exception('Error en la respuesta: ${data['message']}');
@@ -170,11 +338,21 @@ class LoteService {
         debugPrint("Error obteniendo lotes (intento $attempt): $e");
 
         if (attempt == maxRetries) {
-          throw Exception('Error de conexión: $e');
+          // Último intento: usar datos locales
+          final localLotes = await _getLotesFromSQLite(
+            codigoVariedad: codigoVariedad,
+            estatus: estatus,
+            busqueda: busqueda,
+          );
+
+          if (localLotes.isNotEmpty) {
+            debugPrint('📦 Usando lotes de SQLite como fallback');
+            return localLotes;
+          }
+
+          throw Exception('Error de conexión y sin datos locales: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -183,16 +361,69 @@ class LoteService {
     throw Exception('Error inesperado en getLotes()');
   }
 
-  // Obtener un lote por ID usando stored procedure
+  // ============================================================
+  // OBTENER LOTE POR ID - CON SOPORTE OFFLINE
+  // ============================================================
+
+  /// Obtener un lote por ID - Primero SQLite, luego API
   Future<Lote> getLoteById(int id) async {
+    // 1. Buscar en SQLite primero
+    final localLote = await _getLoteByIdFromSQLite(id);
+    if (localLote != null) {
+      debugPrint('📦 Lote $id cargado desde SQLite');
+      return localLote;
+    }
+
+    // 2. Si no está en SQLite, buscar en API
+    debugPrint('🌐 Lote $id no encontrado localmente, consultando API...');
+    return await _getLoteByIdFromAPI(id);
+  }
+
+  /// Buscar lote por ID en SQLite
+  Future<Lote?> _getLoteByIdFromSQLite(int id) async {
+    if (_database == null) return null;
+
+    try {
+      // Primero intentar con catálogo específico por código
+      final catalogoEspecifico =
+          await _database!.getCatalogo('lote_info', clave: id.toString());
+      if (catalogoEspecifico != null) {
+        final dataString = catalogoEspecifico['data'] as String?;
+        if (dataString != null) {
+          return Lote.fromJson(json.decode(dataString));
+        }
+      }
+
+      // Si no, buscar en el catálogo general de lotes
+      final catalogoMap = await _database!.getCatalogo('lotes');
+      if (catalogoMap != null) {
+        final dataString = catalogoMap['data'] as String?;
+        if (dataString != null) {
+          final List<dynamic> lotesData = json.decode(dataString);
+          for (var loteJson in lotesData) {
+            // Buscar por secuencia o id
+            if (loteJson['pmlt_secuencia'] == id || loteJson['id'] == id) {
+              return Lote.fromJson(loteJson);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error buscando lote $id en SQLite: $e');
+    }
+
+    return null;
+  }
+
+  /// Obtener lote por ID desde API
+  Future<Lote> _getLoteByIdFromAPI(int id) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint("Obteniendo lote con ID: $id (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response = await http
             .get(Uri.parse('$lotesUrl/$id'))
             .timeout(const Duration(seconds: 10));
@@ -201,7 +432,7 @@ class LoteService {
           final Map<String, dynamic> data = json.decode(response.body);
 
           if (data['success'] == true && data['data'] != null) {
-            debugPrint("Lote obtenido exitosamente");
+            debugPrint("Lote obtenido exitosamente desde API");
             return Lote.fromJson(data['data']);
           } else {
             throw Exception('Error en la respuesta: ${data['message']}');
@@ -213,11 +444,14 @@ class LoteService {
         debugPrint("Error obteniendo lote por ID (intento $attempt): $e");
 
         if (attempt == maxRetries) {
-          throw Exception('Error de conexión: $e');
+          // Último intento: buscar en SQLite
+          final localLote = await _getLoteByIdFromSQLite(id);
+          if (localLote != null) {
+            return localLote;
+          }
+          throw Exception('Lote no encontrado y sin conexión: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -226,16 +460,18 @@ class LoteService {
     throw Exception('Error inesperado en getLoteById()');
   }
 
-  // Crear un nuevo lote usando stored procedure
+  // ============================================================
+  // MÉTODOS DE ESCRITURA (requieren conexión)
+  // ============================================================
+
   Future<Lote> crearLote(Lote lote) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint("Creando lote: ${lote.pmlt_codigo} (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response = await http
             .post(
               Uri.parse(lotesUrl),
@@ -248,7 +484,6 @@ class LoteService {
           final Map<String, dynamic> data = json.decode(response.body);
 
           if (data['success'] == true && data['data'] != null) {
-            // El SP devuelve el lote completo como JSON
             debugPrint("Lote creado exitosamente");
             return Lote.fromJson(data['data']);
           } else {
@@ -265,8 +500,6 @@ class LoteService {
           throw Exception('Error de conexión: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -275,10 +508,9 @@ class LoteService {
     throw Exception('Error inesperado en crearLote()');
   }
 
-  // Actualizar un lote existente usando stored procedure
   Future<Lote> actualizarLote(Lote lote) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     if (lote.pmlt_secuencia == null) {
       throw Exception('No se puede actualizar un lote sin ID');
@@ -289,7 +521,6 @@ class LoteService {
         debugPrint(
             "Actualizando lote ID: ${lote.pmlt_secuencia} (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response = await http
             .put(
               Uri.parse('$lotesUrl/${lote.pmlt_secuencia}'),
@@ -302,7 +533,6 @@ class LoteService {
           final Map<String, dynamic> data = json.decode(response.body);
 
           if (data['success'] == true && data['data'] != null) {
-            // El SP devuelve el lote actualizado como JSON
             debugPrint("Lote actualizado exitosamente");
             return Lote.fromJson(data['data']);
           } else {
@@ -319,8 +549,6 @@ class LoteService {
           throw Exception('Error de conexión: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -329,16 +557,14 @@ class LoteService {
     throw Exception('Error inesperado en actualizarLote()');
   }
 
-  // Eliminar un lote (baja lógica) usando stored procedure
   Future<bool> eliminarLote(int id) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint("Eliminando lote ID: $id (intento $attempt)");
 
-        // Tiempo de espera reducido ya que usamos stored procedure
         final response = await http
             .delete(Uri.parse('$lotesUrl/$id'))
             .timeout(const Duration(seconds: 10));
@@ -363,8 +589,6 @@ class LoteService {
           throw Exception('Error de conexión: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -373,17 +597,15 @@ class LoteService {
     throw Exception('Error inesperado en eliminarLote()');
   }
 
-  // Método para importar lotes (usado por la pantalla de importación)
   Future<ImportResult> importarLotes(List<Lote> lotes) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint(
             "Importando lotes (intento $attempt): ${lotes.length} lotes");
 
-        // Intentar usar el endpoint batch primero
         final batchResult = await importarLotesBatch(lotes);
 
         return ImportResult(
@@ -395,40 +617,31 @@ class LoteService {
         debugPrint("Error importando lotes (intento $attempt): $e");
 
         if (attempt == maxRetries) {
-          // Implementación alternativa si falla la importación batch
           debugPrint("Intentando importación uno por uno...");
 
-          // Contadores para el resultado
           int creados = 0;
           int ignorados = 0;
 
-          // Procesar lotes uno por uno
           for (var lote in lotes) {
             try {
-              // Verificar si ya existe un lote con ese código
               final existentes = await getLotes(busqueda: lote.pmlt_codigo);
-
               bool existeLote = existentes.any((l) =>
                   l.pmlt_codigo?.toLowerCase() ==
                   lote.pmlt_codigo?.toLowerCase());
 
               if (existeLote) {
-                // Si ya existe, ignorarlo
                 ignorados++;
                 continue;
               }
 
-              // Crear el lote
               await crearLote(lote);
               creados++;
             } catch (e) {
-              // Contar lotes que no se pudieron procesar
               ignorados++;
               debugPrint('Error al procesar lote ${lote.pmlt_codigo}: $e');
             }
           }
 
-          // Devolver resultado
           return ImportResult(
             creados: creados,
             actualizados: 0,
@@ -436,8 +649,6 @@ class LoteService {
           );
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }
@@ -446,17 +657,15 @@ class LoteService {
     throw Exception('Error inesperado en importarLotes()');
   }
 
-  // Método para importar lotes en batch (múltiples lotes a la vez) usando stored procedure
   Future<int> importarLotesBatch(List<Lote> lotes) async {
     int maxRetries = 2;
-    int retryDelay = 1000; // milisegundos
+    int retryDelay = 1000;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         debugPrint(
             "Importando lotes en batch (intento $attempt): ${lotes.length} lotes");
 
-        // Tiempo de espera aumentado para operaciones batch
         final response = await http
             .post(
               Uri.parse('$lotesUrl/batch'),
@@ -471,7 +680,6 @@ class LoteService {
           final Map<String, dynamic> data = json.decode(response.body);
 
           if (data['success'] == true) {
-            // Devuelve el número de lotes creados
             debugPrint(
                 "Importación batch exitosa: ${data['count']} lotes creados");
             return data['count'] ?? 0;
@@ -489,8 +697,6 @@ class LoteService {
           throw Exception('Error en importación batch: $e');
         }
 
-        // Reintento con espera exponencial
-        print('Reintentando en ${retryDelay / 1000} segundos...');
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay *= 2;
       }

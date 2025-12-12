@@ -1,49 +1,21 @@
-# Backend Dockerfile - Node.js con SSL
 FROM node:18-alpine
 
-# Instalar dependencias del sistema
-RUN apk add --no-cache \
-    wget \
-    curl \
-    openssl \
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache python3 make g++ openssl postgresql-client
 
-# Crear directorio de trabajo
 WORKDIR /app
 
-# Crear usuario no-root para seguridad
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S pestcontrol -u 1001
+COPY backend/ .
 
-# Copiar archivos de dependencias
-COPY package*.json ./
+RUN rm -rf node_modules && \
+    npm install && \
+    npm rebuild bcrypt --build-from-source && \
+    npm install express-rate-limit
 
-# Instalar dependencias de producción
-RUN npm ci --only=production && \
-    npm cache clean --force
+COPY cert.pem /cert.pem
+COPY key.pem /key.pem
 
-# Copiar certificados SSL PRIMERO
-COPY certs/ /app/certs/
+RUN mkdir -p logs uploads
 
-# Copiar resto del código fuente
-COPY . .
-
-# Verificar que los certificados estén presentes
-RUN ls -la /app/certs/ && \
-    test -f /app/certs/cert.pem && \
-    test -f /app/certs/key.pem && \
-    echo "✅ Certificados SSL encontrados" || \
-    (echo "❌ Error: Certificados SSL no encontrados" && exit 1)
-
-# Crear directorios necesarios
-RUN mkdir -p /app/certs /app/logs && \
-    chown -R pestcontrol:nodejs /app
-
-# Exponer puerto HTTPS
 EXPOSE 8000
 
-# Cambiar al usuario no-root
-USER pestcontrol
-
-# Comando de inicio
-CMD ["npm", "start"]
+CMD ["npm", "run", "start:prod"]

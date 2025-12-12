@@ -159,17 +159,30 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   // Método actualizado para redirigir según el rol del usuario
   void _navigateBasedOnRole(AuthService authService) {
+    // ✅ NUEVO: Actualizar contexto en AuthService para detección de dispositivo
+    authService.updateContext(context);
+
     // Asegurar que el Navigator global se use para la navegación
     final navigator = Navigator.of(context);
 
-    if (authService.isMonitoreador && !authService.isAdmin) {
-      // Usar pushNamedAndRemoveUntil para limpiar la pila de navegación
+    // ✅ MODIFICADO: Verificar si es admin en móvil para enviar a monitoreo
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
+    if (authService.isAdmin && isMobile) {
+      // Admin en móvil: ir a MonitoreoScreen (sin filtros)
+      navigator.pushNamedAndRemoveUntil(
+        RoutesManager.monitoreo,
+        (route) => false,
+      );
+    } else if (authService.isMonitoreador && !authService.isAdmin) {
+      // Monitoreador normal: ir a MonitoreoScreen (con filtros)
       navigator.pushNamedAndRemoveUntil(
         RoutesManager.monitoreo,
         (route) => false,
       );
     } else {
-      // Para otros roles, ir al Home normal
+      // Admin en desktop o usuarios normales: ir al Home
       navigator.pushNamedAndRemoveUntil(
         RoutesManager.home,
         (route) => false,
@@ -187,6 +200,14 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     }
   }
 
+  // ✅ CORREGIDO: Función para alternar visibilidad de contraseña
+  void _togglePasswordVisibility() {
+    setState(() {
+      _obscurePassword = !_obscurePassword;
+    });
+    _handleUserActivity();
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -194,23 +215,12 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     final screenWidth = mediaQuery.size.width;
     final isKeyboardOpen = keyboardHeight > 0;
     final isMobile = screenWidth < 600;
-    
+
     return OverlayLoginWrapper(
       child: Scaffold(
         backgroundColor: Colors.white,
         resizeToAvoidBottomInset: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          toolbarHeight: (isKeyboardOpen && isMobile) ? 30 : 56,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings, color: Color(0xFF49B8E2)),
-              onPressed: _showConfigurationScreen,
-              tooltip: 'Configurar servidor',
-            ),
-          ],
-        ),
+        // ✅ REMOVIDO: AppBar con botón de configuración (cliente no lo quiere visible)
         body: Listener(
           onPointerDown: (_) => _handleUserActivity(),
           behavior: HitTestBehavior.translucent,
@@ -244,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         ),
                         SizedBox(height: isMobile ? 20 : 32),
                       ],
-                      
+
                       // Título compacto para móvil con teclado
                       if (isKeyboardOpen && isMobile) ...[
                         const Text(
@@ -289,7 +299,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         onTap: _handleUserActivity,
                         onChanged: (_) => _handleUserActivity(),
                         onFieldSubmitted: (_) {
-                          FocusScope.of(context).requestFocus(_passwordFocusNode);
+                          FocusScope.of(context)
+                              .requestFocus(_passwordFocusNode);
                           _handleUserActivity();
                         },
                         decoration: InputDecoration(
@@ -314,7 +325,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF49B8E2)),
+                            borderSide:
+                                const BorderSide(color: Color(0xFF49B8E2)),
                           ),
                         ),
                         validator: (value) {
@@ -324,12 +336,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           return null;
                         },
                       ),
-                      
+
                       SizedBox(height: isMobile ? 12 : 16),
 
-                      // Password Input - FORZANDO REBUILD COMPLETO
+                      // ✅ CORREGIDO: Password Input con funcionalidad de mostrar/ocultar arreglada
                       TextFormField(
-                        key: ValueKey(_obscurePassword), // ESTO FUERZA REBUILD
                         controller: _passwordController,
                         focusNode: _passwordFocusNode,
                         enabled: !_isLoading,
@@ -343,28 +354,29 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         },
                         decoration: InputDecoration(
                           labelText: 'Contraseña',
-                          prefixIcon: const Icon(
+                          labelStyle: TextStyle(fontSize: isMobile ? 13 : 14),
+                          prefixIcon: Icon(
                             Icons.lock,
-                            color: Color(0xFF49B8E2),
+                            color: const Color(0xFF49B8E2),
+                            size: isMobile ? 18 : 20,
                           ),
-                          suffixIcon: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                  color: const Color(0xFF49B8E2),
-                                  size: 20,
-                                ),
-                              ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: const Color(0xFF49B8E2),
+                              size: isMobile ? 18 : 20,
                             ),
+                            onPressed: _togglePasswordVisibility,
+                            splashRadius: 20,
+                            tooltip: _obscurePassword
+                                ? 'Mostrar contraseña'
+                                : 'Ocultar contraseña',
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 12 : 16,
+                            vertical: isMobile ? 8 : 12,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -376,7 +388,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF49B8E2)),
+                            borderSide:
+                                const BorderSide(color: Color(0xFF49B8E2)),
                           ),
                         ),
                         validator: (value) {
@@ -386,15 +399,17 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           return null;
                         },
                       ),
-                      
+
                       SizedBox(height: isMobile ? 16 : 24),
 
                       // Login Button
                       ElevatedButton(
-                        onPressed: _isLoading ? null : () {
-                          _onSubmit(context);
-                          _handleUserActivity();
-                        },
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                _onSubmit(context);
+                                _handleUserActivity();
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF49B8E2),
                           foregroundColor: Colors.white,
@@ -423,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                               ),
                       ),
 
-                      // Footer Links - Solo mostrar cuando no hay teclado en móvil
+                      // ✅ Footer Links - Solo mostrar cuando no hay teclado en móvil
                       if (!isKeyboardOpen || !isMobile) ...[
                         SizedBox(height: isMobile ? 12 : 16),
                         Row(
@@ -432,6 +447,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                             TextButton(
                               onPressed: () {
                                 _handleUserActivity();
+                                // TODO: Implementar recuperación de contraseña
                               },
                               child: Text(
                                 'Contraseña',
@@ -441,23 +457,43 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                                 ),
                               ),
                             ),
-                            const Text('|', style: TextStyle(color: Colors.grey)),
-                            TextButton(
-                              onPressed: () {
-                                _handleUserActivity();
-                              },
-                              child: Text(
-                                'Contacto',
-                                style: TextStyle(
-                                  color: const Color(0xFF49B8E2),
-                                  fontSize: isMobile ? 12 : 14,
+                            const Text('|',
+                                style: TextStyle(color: Colors.grey)),
+                            Tooltip(
+                              message:
+                                  'jmendoza@costanursery.com | 809-722-4957 | DR - Helpdesk',
+                              textStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade800,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: TextButton(
+                                onPressed: () {
+                                  _handleUserActivity();
+                                  // TODO: Implementar información de contacto
+                                },
+                                child: Text(
+                                  'Contacto',
+                                  style: TextStyle(
+                                    color: const Color(0xFF49B8E2),
+                                    fontSize: isMobile ? 12 : 14,
+                                  ),
                                 ),
                               ),
                             ),
-                            const Text('|', style: TextStyle(color: Colors.grey)),
+                            const Text('|',
+                                style: TextStyle(color: Colors.grey)),
                             TextButton(
                               onPressed: () {
                                 _handleUserActivity();
+                                // TODO: Implementar términos y condiciones
                               },
                               child: Text(
                                 'Términos',
@@ -470,21 +506,27 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ],
                         ),
 
-                        // Mostrar la URL del servidor actual
-                        Consumer<ApiConfig>(
-                          builder: (context, apiConfig, child) {
-                            return Padding(
-                              padding: EdgeInsets.only(top: isMobile ? 8 : 16),
-                              child: Text(
-                                'Servidor: ${apiConfig.apiUrl.replaceAll('/api', '')}',
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: isMobile ? 10 : 12,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            );
+                        // ✅ NUEVO: Acceso discreto a configuración (solo para administradores)
+                        SizedBox(height: isMobile ? 8 : 12),
+                        GestureDetector(
+                          onTap: () {
+                            // Acceso discreto para administradores
+                            _showConfigurationScreen();
                           },
+                          child: Container(
+                            height: 20,
+                            color: Colors.transparent,
+                            child: Center(
+                              child: Container(
+                                width: 20,
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(1),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ],

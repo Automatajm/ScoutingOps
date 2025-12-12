@@ -8,7 +8,7 @@ class MonitoreoDetailsDialog {
   static Future<void> showMonitoreoDetails(
       BuildContext context, Monitoreo monitoreo, Function() onEdit) async {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final isSmallScreen = screenWidth < 1024;
 
     return showDialog(
       context: context,

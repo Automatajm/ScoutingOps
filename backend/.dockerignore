@@ -1,57 +1,41 @@
-# Dependencias
+# backend/.dockerignore
+
+# CRÍTICO: No copiar node_modules de Windows
 node_modules/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 
-# Archivos de entorno locales
+# No copiar archivos de entorno
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 
-# Logs
+# No copiar logs
 logs/
 *.log
 
-# Archivos temporales
-.tmp/
-temp/
+# No copiar uploads
+uploads/
 
-# Archivos de sistema
-.DS_Store
-Thumbs.db
-
-# IDEs
+# No copiar archivos de desarrollo
 .vscode/
 .idea/
+*.swp
+.DS_Store
 
-# Docker
-Dockerfile
-.dockerignore
-docker-compose*.yml
-
-# Git
-.git/
-.gitignore
-
-# Documentación
-README.md
-docs/
-
-# Tests
-test/
-tests/
+# No copiar archivos de test
 *.test.js
 *.spec.js
-
-# Coverage
 coverage/
 
-# Build artifacts
-dist/
-build/
+# No copiar archivos de Docker
+Dockerfile
+.dockerignore
 
-# NO excluir certificados SSL
-# !certs/
+# No copiar backups
+*.backup
+*.sql
+
+# No copiar certificados (se montan como volumen)
+*.pem
+*.key
+*.crt

@@ -341,7 +341,18 @@ class Monitoreo {
 
   /// Método para verificar si este monitoreo es temporal (creado offline)
   bool isTemporary() {
-    return pmmo_secuencia != null && pmmo_secuencia! < 0;
+    final result = (pmmo_secuencia != null && pmmo_secuencia! < 0) ||
+        (isOfflineCreated == true);
+
+    if (pmmo_secuencia != null && pmmo_secuencia! < 0) {
+      print('🔍 REGISTRO TEMPORAL DETECTADO:');
+      print('   - ID: $pmmo_secuencia');
+      print('   - isOfflineCreated: $isOfflineCreated');
+      print('   - isSynchronized: $isSynchronized');
+      print('   - isTemporary() result: $result');
+    }
+
+    return result;
   }
 
   /// Método para verificar si el monitoreo necesita sincronización

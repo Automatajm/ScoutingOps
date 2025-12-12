@@ -21,7 +21,7 @@ class ResponsiveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final isSmallScreen = screenWidth < 1024;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -98,7 +98,7 @@ class _CollapsibleCardState extends State<CollapsibleCard> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final isSmallScreen = screenWidth < 1024;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),

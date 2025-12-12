@@ -135,10 +135,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST - Crear un nuevo monitoreo
+// POST - Crear un nuevo monitoreo (CON IDEMPOTENCIA)
 router.post('/', async (req, res) => {
   try {
-    // Extraer los campos de la solicitud
     const {
       pmlt_codigo,
       pmmo_casa,
@@ -164,10 +163,10 @@ router.post('/', async (req, res) => {
       pmmo_muestra1,
       pmmo_muestra2,
       pmmo_muestra3,
-      pmmo_contenedor
+      pmmo_contenedor,
+      idempotency_key  // NUEVO
     } = req.body;
     
-    // Validar campos requeridos
     if (!pmlt_codigo || !pmmo_casa || !pmmo_cantero || !pmmo_variedad || !pmni_nombrecomun || pmmo_cantidad === undefined) {
       return res.status(400).json({
         success: false,
@@ -176,14 +175,16 @@ router.post('/', async (req, res) => {
     }
     
     console.log('Creando monitoreo mediante stored procedure');
-    console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
+    if (idempotency_key) {
+      console.log(`Idempotency key: ${idempotency_key}`);
+    }
     
     const db = req.app.get('db');
     
     let result;
     try {
       result = await db.query(
-        'SELECT * FROM sp_create_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)',
+        'SELECT * FROM sp_create_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)',
         [
           pmlt_codigo,
           pmmo_casa,
@@ -209,19 +210,15 @@ router.post('/', async (req, res) => {
           pmmo_muestra1 || null,
           pmmo_muestra2 || null,
           pmmo_muestra3 || null,
-          pmmo_contenedor || 'CONT_GENERAL'
+          pmmo_contenedor || 'CONT_GENERAL',
+          idempotency_key || null  // NUEVO - parámetro 26
         ]
       );
     } catch (queryError) {
-      logQueryError(queryError, 'sp_create_monitoreo', [
-        pmlt_codigo, pmmo_casa, pmmo_cantero, pmmo_variedad, pmni_nombrecomun, pmmo_cantidad,
-        pmmo_canteros, pmmo_idvariedad, pmmo_grower, pmmo_cant_botada, pmmo_comentarios, 
-        pmmo_fecha, pmmo_automatico, pmmo_estatus, pmmo_creadopor
-      ]);
+      logQueryError(queryError, 'sp_create_monitoreo', [pmlt_codigo, pmmo_casa, pmmo_cantero]);
       throw queryError;
     }
     
-    // Verificar resultado
     if (!result.rows || result.rows.length === 0) {
       return res.status(500).json({
         success: false,
@@ -232,22 +229,20 @@ router.post('/', async (req, res) => {
     const { success, message, monitoreo_id } = result.rows[0];
     
     if (!success) {
-      return res.status(400).json({
-        success: false,
-        message: message
-      });
+      if (message.includes('Ya existe un monitoreo')) {
+        return res.status(409).json({
+          success: false,
+          message: message,
+          existing_id: monitoreo_id
+        });
+      }
+      return res.status(400).json({ success: false, message: message });
     }
     
-    // Obtener el monitoreo recién creado
     let monitoreoResult;
     try {
-      monitoreoResult = await db.query(
-        'SELECT * FROM sp_get_monitoreo_by_id($1)',
-        [monitoreo_id]
-      );
+      monitoreoResult = await db.query('SELECT * FROM sp_get_monitoreo_by_id($1)', [monitoreo_id]);
     } catch (queryError) {
-      logQueryError(queryError, 'sp_get_monitoreo_by_id', [monitoreo_id]);
-      // Si falla, devolver éxito pero sin datos completos
       return res.status(201).json({
         success: true,
         message: message,
@@ -255,11 +250,16 @@ router.post('/', async (req, res) => {
       });
     }
     
-    console.log(`Monitoreo creado exitosamente con ID: ${monitoreo_id}`);
-    res.status(201).json({
+    const isIdempotent = message.includes('idempotente');
+    const statusCode = isIdempotent ? 200 : 201;
+    
+    console.log(`Monitoreo ${isIdempotent ? 'retornado (idempotente)' : 'creado'} con ID: ${monitoreo_id}`);
+    
+    res.status(statusCode).json({
       success: true,
       message: message,
-      data: monitoreoResult.rows[0] || { pmmo_secuencia: monitoreo_id }
+      data: monitoreoResult.rows[0] || { pmmo_secuencia: monitoreo_id },
+      idempotent: isIdempotent
     });
   } catch (err) {
     console.error('Error al crear monitoreo:', err);
@@ -273,7 +273,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT - Actualizar un monitoreo existente
+// PUT - Actualizar un monitoreo existente (CON CONTROL DE VERSIÓN)
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,18 +304,21 @@ router.put('/:id', async (req, res) => {
       pmmo_muestra1,
       pmmo_muestra2,
       pmmo_muestra3,
-      pmmo_contenedor
+      pmmo_contenedor,
+      expected_version  // NUEVO
     } = req.body;
     
-    console.log(`Actualizando monitoreo ID: ${parsedId} mediante stored procedure`);
-    console.log('Datos recibidos para actualización:', JSON.stringify(req.body, null, 2));
+    console.log(`Actualizando monitoreo ID: ${parsedId}`);
+    if (expected_version !== undefined) {
+      console.log(`Versión esperada: ${expected_version}`);
+    }
     
     const db = req.app.get('db');
     
     let result;
     try {
       result = await db.query(
-        'SELECT * FROM sp_update_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)',
+        'SELECT * FROM sp_update_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)',
         [
           parsedId,
           pmlt_codigo || null,
@@ -342,15 +345,15 @@ router.put('/:id', async (req, res) => {
           pmmo_muestra1 !== undefined ? pmmo_muestra1 : null,
           pmmo_muestra2 !== undefined ? pmmo_muestra2 : null,
           pmmo_muestra3 !== undefined ? pmmo_muestra3 : null,
-          pmmo_contenedor || null
+          pmmo_contenedor || null,
+          expected_version !== undefined ? parseInt(expected_version) : null  // NUEVO - parámetro 27
         ]
       );
     } catch (queryError) {
-      logQueryError(queryError, 'sp_update_monitoreo', [parsedId, /* parámetros restantes */]);
+      logQueryError(queryError, 'sp_update_monitoreo', [parsedId]);
       throw queryError;
     }
     
-    // Verificar resultado
     if (!result.rows || result.rows.length === 0) {
       return res.status(500).json({
         success: false,
@@ -358,36 +361,38 @@ router.put('/:id', async (req, res) => {
       });
     }
     
-    const { success, message, monitoreo_id } = result.rows[0];
+    const { success, message, id: monitoreo_id, new_version } = result.rows[0];
     
     if (!success) {
-      return res.status(400).json({
-        success: false,
-        message: message
-      });
+      if (message.includes('Conflicto')) {
+        return res.status(409).json({
+          success: false,
+          message: message,
+          conflict: true,
+          current_version: new_version
+        });
+      }
+      return res.status(400).json({ success: false, message: message });
     }
     
-    // Obtener el monitoreo actualizado
     let monitoreoResult;
     try {
-      monitoreoResult = await db.query(
-        'SELECT * FROM sp_get_monitoreo_by_id($1)',
-        [monitoreo_id]
-      );
+      monitoreoResult = await db.query('SELECT * FROM sp_get_monitoreo_by_id($1)', [monitoreo_id]);
     } catch (queryError) {
-      logQueryError(queryError, 'sp_get_monitoreo_by_id', [monitoreo_id]);
-      // Si falla, devolver éxito pero sin datos completos
       return res.json({
         success: true,
-        message: message
+        message: message,
+        new_version: new_version
       });
     }
     
-    console.log(`Monitoreo actualizado exitosamente ID: ${parsedId}`);
+    console.log(`Monitoreo actualizado ID: ${parsedId}, versión: ${new_version}`);
+    
     res.json({
       success: true,
       message: message,
-      data: monitoreoResult.rows[0] || { pmmo_secuencia: monitoreo_id }
+      data: monitoreoResult.rows[0] || { pmmo_secuencia: monitoreo_id },
+      new_version: new_version
     });
   } catch (err) {
     console.error('Error al actualizar monitoreo:', err);
@@ -422,7 +427,6 @@ router.delete('/:id', async (req, res) => {
       throw queryError;
     }
     
-    // Verificar resultado
     if (!result.rows || result.rows.length === 0) {
       return res.status(500).json({
         success: false,
@@ -460,6 +464,109 @@ router.delete('/:id', async (req, res) => {
         error: err.message
       });
     }
+  }
+});
+
+// GET - Verificar idempotency key
+router.get('/check-idempotency/:key', async (req, res) => {
+  try {
+    const { key } = req.params;
+    
+    if (!key) {
+      return res.status(400).json({ success: false, message: 'Se requiere idempotency_key' });
+    }
+    
+    const db = req.app.get('db');
+    const result = await db.query('SELECT * FROM sp_check_idempotency($1)', [key]);
+    
+    if (result.rows.length === 0 || !result.rows[0].exists_flag) {
+      return res.json({ success: true, exists: false });
+    }
+    
+    const { monitoreo_id, created_at } = result.rows[0];
+    res.json({
+      success: true,
+      exists: true,
+      monitoreo_id: monitoreo_id,
+      created_at: created_at
+    });
+  } catch (err) {
+    console.error('Error al verificar idempotency:', err);
+    res.status(500).json({ success: false, message: 'Error al verificar', error: err.message });
+  }
+});
+
+// POST - Sincronización en batch
+router.post('/sync-batch', async (req, res) => {
+  const db = req.app.get('db');
+  const client = await db.getClient();
+  
+  try {
+    const { monitoreos } = req.body;
+    
+    if (!monitoreos || !Array.isArray(monitoreos) || monitoreos.length === 0) {
+      return res.status(400).json({ success: false, message: 'Debe proporcionar un array de monitoreos' });
+    }
+    
+    console.log(`Sincronización batch: ${monitoreos.length} monitoreos`);
+    
+    await client.query('BEGIN');
+    
+    const resultados = [];
+    let creados = 0, idempotentes = 0, fallidos = 0;
+    
+    for (const m of monitoreos) {
+      try {
+        if (!m.pmlt_codigo || !m.pmmo_casa || !m.pmmo_cantero || !m.pmmo_variedad || !m.pmni_nombrecomun || m.pmmo_cantidad === undefined) {
+          resultados.push({ success: false, message: 'Faltan campos', temp_id: m.temp_id, idempotency_key: m.idempotency_key });
+          fallidos++;
+          continue;
+        }
+        
+        const result = await client.query(
+          'SELECT * FROM sp_create_monitoreo($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)',
+          [
+            m.pmlt_codigo, m.pmmo_casa, m.pmmo_cantero, m.pmmo_variedad, m.pmni_nombrecomun, m.pmmo_cantidad,
+            m.pmmo_canteros || null, m.pmmo_idvariedad || null, m.pmmo_grower || null, m.pmmo_cant_botada || null,
+            m.pmmo_comentarios || null, m.pmmo_fecha || null, m.pmmo_automatico !== undefined ? m.pmmo_automatico : true,
+            m.pmmo_estatus !== undefined ? m.pmmo_estatus : 1, m.pmmo_creadopor || 1,
+            m.pmmo_nivmuestram1 || null, m.pmmo_nivmuestram2 || null, m.pmmo_nivmuestram3 || null,
+            m.pmmo_nivmuestraa1 || null, m.pmmo_nivmuestraa2 || null, m.pmmo_nivmuestraa3 || null,
+            m.pmmo_muestra1 || null, m.pmmo_muestra2 || null, m.pmmo_muestra3 || null,
+            m.pmmo_contenedor || 'CONT_GENERAL', m.idempotency_key || null
+          ]
+        );
+        
+        const { success, message, monitoreo_id } = result.rows[0];
+        const isIdempotent = message.includes('idempotente');
+        
+        if (success) {
+          resultados.push({ success: true, server_id: monitoreo_id, temp_id: m.temp_id, idempotency_key: m.idempotency_key, idempotent: isIdempotent });
+          isIdempotent ? idempotentes++ : creados++;
+        } else {
+          resultados.push({ success: false, message, temp_id: m.temp_id, idempotency_key: m.idempotency_key });
+          fallidos++;
+        }
+      } catch (error) {
+        resultados.push({ success: false, message: error.message, temp_id: m.temp_id });
+        fallidos++;
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: `Sync: ${creados} creados, ${idempotentes} existían, ${fallidos} fallidos`,
+      summary: { total: monitoreos.length, created: creados, idempotent: idempotentes, failed: fallidos },
+      results: resultados
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error en sync batch:', err);
+    res.status(500).json({ success: false, message: 'Error en sincronización', error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -641,7 +748,6 @@ router.post('/auto-niveles', async (req, res) => {
       pmmo_contenedor
     } = req.body;
     
-    // Validar campos obligatorios
     if (!pmlt_codigo || !pmmo_casa || !pmmo_cantero || !pmmo_variedad || !pmni_nombrecomun || 
         pmmo_cantidad === undefined || pmmo_muestra1 === undefined || 
         pmmo_muestra2 === undefined || pmmo_muestra3 === undefined) {
@@ -688,7 +794,6 @@ router.post('/auto-niveles', async (req, res) => {
       throw queryError;
     }
     
-    // Verificar resultado
     if (!result.rows || result.rows.length === 0) {
       return res.status(500).json({
         success: false,
@@ -705,7 +810,6 @@ router.post('/auto-niveles', async (req, res) => {
       });
     }
     
-    // Obtener el monitoreo completo
     let monitoreoResult;
     try {
       monitoreoResult = await db.query(
@@ -714,7 +818,6 @@ router.post('/auto-niveles', async (req, res) => {
       );
     } catch (queryError) {
       logQueryError(queryError, 'sp_get_monitoreo_by_id', [monitoreo_id]);
-      // Si falla, devolver éxito pero sin datos completos
       return res.status(201).json({
         success: true,
         message: message,
@@ -869,7 +972,6 @@ router.get('/filtros/casas-canteros', async (req, res) => {
       throw queryError;
     }
     
-    // Procesar los resultados para formato de filtro
     const casas = [];
     const canteros = [];
     
@@ -937,15 +1039,13 @@ router.get('/filtros/variedades', async (req, res) => {
   }
 });
 
-// Nuevos endpoints para funcionalidades adicionales
-
 // GET - Obtener tendencias de plagas por periodo
 router.get('/tendencias/:periodo', async (req, res) => {
   try {
     const { periodo } = req.params;
     const { usuarioId } = req.query;
     
-    let periodoEnDias = 30; // Por defecto, mensual
+    let periodoEnDias = 30;
     
     switch (periodo) {
       case 'semanal':
@@ -965,8 +1065,6 @@ router.get('/tendencias/:periodo', async (req, res) => {
     
     const db = req.app.get('db');
     
-    // Aquí faltaría crear el stored procedure sp_get_tendencias_plagas
-    // Por ahora, se hace una consulta directa
     let result;
     try {
       result = await db.query(`
@@ -1012,7 +1110,6 @@ router.get('/mapa-calor', async (req, res) => {
     
     const db = req.app.get('db');
     
-    // Construir los parámetros de consulta
     const queryParams = [];
     let paramCount = 1;
     let whereClause = 'm.pmmo_estatus = 1';
@@ -1021,7 +1118,6 @@ router.get('/mapa-calor', async (req, res) => {
       whereClause += ` AND m.pmmo_fecha >= $${paramCount++}`;
       queryParams.push(fechaInicio);
     } else {
-      // Por defecto, últimos 30 días
       whereClause += ` AND m.pmmo_fecha >= NOW() - INTERVAL '30 days'`;
     }
     
@@ -1076,7 +1172,6 @@ router.get('/comparar-lotes', async (req, res) => {
   try {
     const { lotes, dias } = req.query;
     
-    // Validar parámetros
     if (!lotes) {
       return res.status(400).json({
         success: false,
@@ -1091,7 +1186,6 @@ router.get('/comparar-lotes', async (req, res) => {
     
     const db = req.app.get('db');
     
-    // Consulta para obtener datos de monitoreo para cada lote
     let result;
     try {
       const placeholders = lotesArray.map((_, i) => `$${i + 1}`).join(',');
@@ -1117,7 +1211,6 @@ router.get('/comparar-lotes', async (req, res) => {
       throw queryError;
     }
     
-    // Organizar los resultados por lote
     const comparacion = {};
     
     lotesArray.forEach(lote => {
@@ -1164,7 +1257,6 @@ router.get('/comparar-lotes', async (req, res) => {
 
 // POST - Importar múltiples monitoreos
 router.post('/importar', async (req, res) => {
-  // Usar el módulo db compartido
   const db = req.app.get('db');
   const client = await db.getClient();
   
@@ -1180,17 +1272,14 @@ router.post('/importar', async (req, res) => {
     
     console.log(`Iniciando importación de ${monitoreos.length} monitoreos`);
     
-    // Iniciar transacción
     await client.query('BEGIN');
     
     const resultados = [];
     let exitosos = 0;
     let fallidos = 0;
     
-    // Procesar cada monitoreo
     for (const monitoreo of monitoreos) {
       try {
-        // Validar campos requeridos
         if (!monitoreo.pmlt_codigo || !monitoreo.pmmo_casa || !monitoreo.pmmo_cantero || 
             !monitoreo.pmmo_variedad || !monitoreo.pmni_nombrecomun || monitoreo.pmmo_cantidad === undefined) {
           resultados.push({
@@ -1202,9 +1291,8 @@ router.post('/importar', async (req, res) => {
           continue;
         }
         
-        // Crear el monitoreo usando el stored procedure
         const result = await client.query(
-          'SELECT * FROM sp_create_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)',
+          'SELECT * FROM sp_create_monitoreo($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)',
           [
             monitoreo.pmlt_codigo,
             monitoreo.pmmo_casa,
@@ -1230,7 +1318,8 @@ router.post('/importar', async (req, res) => {
             monitoreo.pmmo_muestra1 || null,
             monitoreo.pmmo_muestra2 || null,
             monitoreo.pmmo_muestra3 || null,
-            monitoreo.pmmo_contenedor || 'CONT_GENERAL'
+            monitoreo.pmmo_contenedor || 'CONT_GENERAL',
+            monitoreo.idempotency_key || null
           ]
         );
         
@@ -1262,7 +1351,6 @@ router.post('/importar', async (req, res) => {
       }
     }
     
-    // Confirmar la transacción
     await client.query('COMMIT');
     
     res.json({
@@ -1276,7 +1364,6 @@ router.post('/importar', async (req, res) => {
       }
     });
   } catch (err) {
-    // Revertir la transacción en caso de error
     await client.query('ROLLBACK');
     
     console.error('Error al importar monitoreos:', err);
@@ -1288,8 +1375,516 @@ router.post('/importar', async (req, res) => {
       });
     }
   } finally {
-    // Liberar el cliente
     client.release();
+  }
+});
+
+// ============================================================
+// ENDPOINTS DE SINCRONIZACIÓN PARA DR PEST CONTROL
+// ============================================================
+// INSTRUCCIONES:
+// 1. Abrir routes/monitoreo.js
+// 2. Buscar la línea: module.exports = router;
+// 3. Pegar TODO este código ANTES de esa línea
+// 4. Reiniciar el servidor
+// ============================================================
+
+// GET - Sincronización incremental (pull de cambios desde servidor)
+// Solo devuelve registros de los últimos N días para el usuario
+// Uso: GET /api/monitoreo/sync?usuario=4&dias=2
+router.get('/sync', async (req, res) => {
+  try {
+    const { desde, usuario, limit, dias } = req.query;
+    
+    const usuarioId = usuario ? parseInt(usuario) : null;
+    const limitNum = Math.min(parseInt(limit) || 500, 1000);
+    const diasNum = parseInt(dias) || 2; // Por defecto 2 días (hoy y ayer)
+    
+    if (!usuarioId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Se requiere el parámetro usuario'
+      });
+    }
+    
+    console.log(`Sync incremental - usuario: ${usuarioId}, dias: ${diasNum}, desde: ${desde || 'inicio'}`);
+    
+    const db = req.app.get('db');
+    
+    let query;
+    let params;
+    
+    if (desde) {
+      // Sync incremental: cambios desde última sincronización (dentro de ventana de días)
+      query = `
+        SELECT 
+          pmmo_secuencia,
+          pmlt_codigo,
+          pmmo_casa,
+          pmmo_cantero,
+          pmmo_canteros,
+          pmmo_variedad,
+          pmmo_idvariedad,
+          pmmo_grower,
+          pmni_nombrecomun,
+          pmmo_cantidad,
+          pmmo_cant_botada,
+          pmmo_comentarios,
+          pmmo_fecha,
+          pmmo_automatico,
+          pmmo_estatus,
+          pmmo_creadopor,
+          pmmo_contenedor,
+          pmni_id,
+          pmmo_muestra1,
+          pmmo_muestra2,
+          pmmo_muestra3,
+          pmmo_nivmuestraa1,
+          pmmo_nivmuestraa2,
+          pmmo_nivmuestraa3,
+          pmmo_nivmuestram1,
+          pmmo_nivmuestram2,
+          pmmo_nivmuestram3,
+          lmsupniv1,
+          lmsupniv2,
+          lmsupniv3,
+          version,
+          idempotency_key,
+          pmmo_fechacreacion,
+          pmmo_fechamodificacion,
+          GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) as last_modified
+        FROM pm_monitoreos
+        WHERE pmmo_creadopor = $1
+          AND pmmo_fecha >= (CURRENT_DATE - INTERVAL '${diasNum} days')
+          AND GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) > $2
+        ORDER BY last_modified ASC
+        LIMIT ${limitNum}
+      `;
+      params = [usuarioId, desde];
+    } else {
+      // Sync inicial: todos los registros de los últimos N días
+      query = `
+        SELECT 
+          pmmo_secuencia,
+          pmlt_codigo,
+          pmmo_casa,
+          pmmo_cantero,
+          pmmo_canteros,
+          pmmo_variedad,
+          pmmo_idvariedad,
+          pmmo_grower,
+          pmni_nombrecomun,
+          pmmo_cantidad,
+          pmmo_cant_botada,
+          pmmo_comentarios,
+          pmmo_fecha,
+          pmmo_automatico,
+          pmmo_estatus,
+          pmmo_creadopor,
+          pmmo_contenedor,
+          pmni_id,
+          pmmo_muestra1,
+          pmmo_muestra2,
+          pmmo_muestra3,
+          pmmo_nivmuestraa1,
+          pmmo_nivmuestraa2,
+          pmmo_nivmuestraa3,
+          pmmo_nivmuestram1,
+          pmmo_nivmuestram2,
+          pmmo_nivmuestram3,
+          lmsupniv1,
+          lmsupniv2,
+          lmsupniv3,
+          version,
+          idempotency_key,
+          pmmo_fechacreacion,
+          pmmo_fechamodificacion,
+          GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) as last_modified
+        FROM pm_monitoreos
+        WHERE pmmo_creadopor = $1
+          AND pmmo_estatus = 1
+          AND pmmo_fecha >= (CURRENT_DATE - INTERVAL '${diasNum} days')
+        ORDER BY pmmo_fecha DESC
+        LIMIT ${limitNum}
+      `;
+      params = [usuarioId];
+    }
+    
+    const result = await db.query(query, params);
+    
+    const hasMore = result.rows.length === limitNum;
+    const lastTimestamp = result.rows.length > 0 
+      ? result.rows[result.rows.length - 1].last_modified 
+      : null;
+    
+    console.log(`Sync: ${result.rows.length} registros devueltos (ventana: ${diasNum} días)`);
+    
+    res.json({
+      success: true,
+      data: result.rows,
+      meta: {
+        count: result.rows.length,
+        hasMore: hasMore,
+        lastTimestamp: lastTimestamp,
+        serverTime: new Date().toISOString(),
+        windowDays: diasNum
+      }
+    });
+    
+  } catch (err) {
+    console.error('Error en sync incremental:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error en sincronización',
+      error: err.message
+    });
+  }
+});
+
+// POST - Sync bidireccional completo (push + pull en una llamada)
+// Para usuarios normales: solo sincroniza ventana de 2 días
+router.post('/sync/full', async (req, res) => {
+  const db = req.app.get('db');
+  const client = await db.getClient();
+  
+  try {
+    const { 
+      monitoreos_pendientes,
+      last_sync_timestamp,
+      usuario_id,
+      dias // Ventana de días (default 2)
+    } = req.body;
+    
+    if (!usuario_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Se requiere usuario_id' 
+      });
+    }
+    
+    const diasNum = parseInt(dias) || 2;
+    
+    console.log(`Sync full - usuario: ${usuario_id}, pendientes: ${monitoreos_pendientes?.length || 0}, ventana: ${diasNum} días`);
+    
+    await client.query('BEGIN');
+    
+    const resultados_push = [];
+    let creados = 0, actualizados = 0, conflictos = 0, fallidos = 0, idempotentes = 0;
+    
+    // ========== FASE 1: PUSH (subir cambios locales) ==========
+    if (monitoreos_pendientes && monitoreos_pendientes.length > 0) {
+      for (const m of monitoreos_pendientes) {
+        try {
+          const isUpdate = m.pmmo_secuencia && m.pmmo_secuencia > 0;
+          
+          if (isUpdate) {
+            // UPDATE: Registro existente
+            const updateResult = await client.query(
+              `UPDATE pm_monitoreos SET
+                pmlt_codigo = COALESCE($2, pmlt_codigo),
+                pmmo_casa = COALESCE($3, pmmo_casa),
+                pmmo_cantero = COALESCE($4, pmmo_cantero),
+                pmmo_canteros = COALESCE($5, pmmo_canteros),
+                pmmo_variedad = COALESCE($6, pmmo_variedad),
+                pmmo_idvariedad = COALESCE($7, pmmo_idvariedad),
+                pmmo_grower = COALESCE($8, pmmo_grower),
+                pmni_nombrecomun = COALESCE($9, pmni_nombrecomun),
+                pmmo_cantidad = COALESCE($10, pmmo_cantidad),
+                pmmo_cant_botada = $11,
+                pmmo_comentarios = $12,
+                pmmo_fecha = COALESCE($13, pmmo_fecha),
+                pmmo_automatico = COALESCE($14, pmmo_automatico),
+                pmmo_estatus = COALESCE($15, pmmo_estatus),
+                pmmo_modificadopor = $16,
+                pmmo_fechamodificacion = NOW(),
+                pmmo_contenedor = COALESCE($17, pmmo_contenedor),
+                pmni_id = COALESCE($18, pmni_id),
+                pmmo_muestra1 = $19,
+                pmmo_muestra2 = $20,
+                pmmo_muestra3 = $21,
+                pmmo_nivmuestraa1 = $22,
+                pmmo_nivmuestraa2 = $23,
+                pmmo_nivmuestraa3 = $24,
+                pmmo_nivmuestram1 = $25,
+                pmmo_nivmuestram2 = $26,
+                pmmo_nivmuestram3 = $27,
+                version = version + 1
+              WHERE pmmo_secuencia = $1
+                AND (version = $28 OR $28 IS NULL)
+              RETURNING pmmo_secuencia, version`,
+              [
+                m.pmmo_secuencia,
+                m.pmlt_codigo, m.pmmo_casa, m.pmmo_cantero, m.pmmo_canteros,
+                m.pmmo_variedad, m.pmmo_idvariedad, m.pmmo_grower,
+                m.pmni_nombrecomun, m.pmmo_cantidad, m.pmmo_cant_botada,
+                m.pmmo_comentarios, m.pmmo_fecha, m.pmmo_automatico,
+                m.pmmo_estatus, usuario_id, m.pmmo_contenedor, m.pmni_id,
+                m.pmmo_muestra1, m.pmmo_muestra2, m.pmmo_muestra3,
+                m.pmmo_nivmuestraa1, m.pmmo_nivmuestraa2, m.pmmo_nivmuestraa3,
+                m.pmmo_nivmuestram1, m.pmmo_nivmuestram2, m.pmmo_nivmuestram3,
+                m.expected_version !== undefined ? m.expected_version : null
+              ]
+            );
+            
+            if (updateResult.rows.length > 0) {
+              resultados_push.push({
+                success: true,
+                operation: 'update',
+                temp_id: m.temp_id,
+                server_id: updateResult.rows[0].pmmo_secuencia,
+                new_version: updateResult.rows[0].version,
+                idempotency_key: m.idempotency_key
+              });
+              actualizados++;
+            } else {
+              // Conflicto de versión
+              const currentVersion = await client.query(
+                'SELECT version FROM pm_monitoreos WHERE pmmo_secuencia = $1',
+                [m.pmmo_secuencia]
+              );
+              
+              resultados_push.push({
+                success: false,
+                operation: 'update',
+                conflict: true,
+                temp_id: m.temp_id,
+                server_id: m.pmmo_secuencia,
+                message: 'Conflicto de versión - el registro fue modificado en el servidor',
+                client_version: m.expected_version,
+                server_version: currentVersion.rows[0]?.version,
+                idempotency_key: m.idempotency_key
+              });
+              conflictos++;
+            }
+          } else {
+            // INSERT: Nuevo registro
+            // Verificar idempotency
+            if (m.idempotency_key) {
+              const existingCheck = await client.query(
+                'SELECT pmmo_secuencia, version FROM pm_monitoreos WHERE idempotency_key = $1',
+                [m.idempotency_key]
+              );
+              
+              if (existingCheck.rows.length > 0) {
+                resultados_push.push({
+                  success: true,
+                  operation: 'idempotent',
+                  temp_id: m.temp_id,
+                  server_id: existingCheck.rows[0].pmmo_secuencia,
+                  new_version: existingCheck.rows[0].version,
+                  idempotency_key: m.idempotency_key,
+                  was_idempotent: true
+                });
+                idempotentes++;
+                continue;
+              }
+            }
+            
+            // Insertar nuevo
+            const insertResult = await client.query(
+              `INSERT INTO pm_monitoreos (
+                pmlt_codigo, pmmo_casa, pmmo_cantero, pmmo_canteros,
+                pmmo_variedad, pmmo_idvariedad, pmmo_grower,
+                pmni_nombrecomun, pmmo_cantidad, pmmo_cant_botada,
+                pmmo_comentarios, pmmo_fecha, pmmo_automatico,
+                pmmo_estatus, pmmo_creadopor, pmmo_contenedor, pmni_id,
+                pmmo_muestra1, pmmo_muestra2, pmmo_muestra3,
+                pmmo_nivmuestraa1, pmmo_nivmuestraa2, pmmo_nivmuestraa3,
+                pmmo_nivmuestram1, pmmo_nivmuestram2, pmmo_nivmuestram3,
+                idempotency_key, version, pmmo_fechacreacion
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                $21, $22, $23, $24, $25, $26, $27, 1, NOW()
+              )
+              RETURNING pmmo_secuencia, version`,
+              [
+                m.pmlt_codigo, m.pmmo_casa, m.pmmo_cantero, m.pmmo_canteros,
+                m.pmmo_variedad, m.pmmo_idvariedad, m.pmmo_grower,
+                m.pmni_nombrecomun, m.pmmo_cantidad, m.pmmo_cant_botada,
+                m.pmmo_comentarios, m.pmmo_fecha, 
+                m.pmmo_automatico !== undefined ? m.pmmo_automatico : true,
+                m.pmmo_estatus || 1, usuario_id, m.pmmo_contenedor || 'CONT_GENERAL', 
+                m.pmni_id,
+                m.pmmo_muestra1, m.pmmo_muestra2, m.pmmo_muestra3,
+                m.pmmo_nivmuestraa1, m.pmmo_nivmuestraa2, m.pmmo_nivmuestraa3,
+                m.pmmo_nivmuestram1, m.pmmo_nivmuestram2, m.pmmo_nivmuestram3,
+                m.idempotency_key
+              ]
+            );
+            
+            resultados_push.push({
+              success: true,
+              operation: 'create',
+              temp_id: m.temp_id,
+              server_id: insertResult.rows[0].pmmo_secuencia,
+              new_version: insertResult.rows[0].version,
+              idempotency_key: m.idempotency_key,
+              was_idempotent: false
+            });
+            creados++;
+          }
+        } catch (error) {
+          console.error('Error procesando monitoreo en sync:', error);
+          resultados_push.push({
+            success: false,
+            operation: m.pmmo_secuencia > 0 ? 'update' : 'create',
+            temp_id: m.temp_id,
+            error: error.message,
+            idempotency_key: m.idempotency_key
+          });
+          fallidos++;
+        }
+      }
+    }
+    
+    // ========== FASE 2: PULL (descargar cambios del servidor) ==========
+    // Solo registros de los últimos N días
+    let pullQuery;
+    let pullParams;
+    
+    if (last_sync_timestamp) {
+      pullQuery = `
+        SELECT 
+          pmmo_secuencia, pmlt_codigo, pmmo_casa, pmmo_cantero, pmmo_canteros,
+          pmmo_variedad, pmmo_idvariedad, pmmo_grower, pmni_nombrecomun,
+          pmmo_cantidad, pmmo_cant_botada, pmmo_comentarios, pmmo_fecha,
+          pmmo_automatico, pmmo_estatus, pmmo_creadopor, pmmo_contenedor,
+          pmni_id, pmmo_muestra1, pmmo_muestra2, pmmo_muestra3,
+          pmmo_nivmuestraa1, pmmo_nivmuestraa2, pmmo_nivmuestraa3,
+          pmmo_nivmuestram1, pmmo_nivmuestram2, pmmo_nivmuestram3,
+          lmsupniv1, lmsupniv2, lmsupniv3, version, idempotency_key,
+          pmmo_fechacreacion, pmmo_fechamodificacion,
+          GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) as last_modified
+        FROM pm_monitoreos
+        WHERE pmmo_creadopor = $1
+          AND pmmo_fecha >= (CURRENT_DATE - INTERVAL '${diasNum} days')
+          AND GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) > $2
+        ORDER BY last_modified ASC
+        LIMIT 500
+      `;
+      pullParams = [usuario_id, last_sync_timestamp];
+    } else {
+      pullQuery = `
+        SELECT 
+          pmmo_secuencia, pmlt_codigo, pmmo_casa, pmmo_cantero, pmmo_canteros,
+          pmmo_variedad, pmmo_idvariedad, pmmo_grower, pmni_nombrecomun,
+          pmmo_cantidad, pmmo_cant_botada, pmmo_comentarios, pmmo_fecha,
+          pmmo_automatico, pmmo_estatus, pmmo_creadopor, pmmo_contenedor,
+          pmni_id, pmmo_muestra1, pmmo_muestra2, pmmo_muestra3,
+          pmmo_nivmuestraa1, pmmo_nivmuestraa2, pmmo_nivmuestraa3,
+          pmmo_nivmuestram1, pmmo_nivmuestram2, pmmo_nivmuestram3,
+          lmsupniv1, lmsupniv2, lmsupniv3, version, idempotency_key,
+          pmmo_fechacreacion, pmmo_fechamodificacion,
+          GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion)) as last_modified
+        FROM pm_monitoreos
+        WHERE pmmo_creadopor = $1 
+          AND pmmo_estatus = 1
+          AND pmmo_fecha >= (CURRENT_DATE - INTERVAL '${diasNum} days')
+        ORDER BY pmmo_fecha DESC
+        LIMIT 500
+      `;
+      pullParams = [usuario_id];
+    }
+    
+    const pullResult = await client.query(pullQuery, pullParams);
+    
+    await client.query('COMMIT');
+    
+    const serverTime = new Date().toISOString();
+    
+    console.log(`Sync full completado - push: ${creados} creados, ${actualizados} actualizados, ${idempotentes} idempotentes, ${conflictos} conflictos, ${fallidos} fallidos | pull: ${pullResult.rows.length} registros`);
+    
+    res.json({
+      success: true,
+      push: {
+        results: resultados_push,
+        summary: {
+          total: monitoreos_pendientes?.length || 0,
+          created: creados,
+          updated: actualizados,
+          idempotent: idempotentes,
+          conflicts: conflictos,
+          failed: fallidos
+        }
+      },
+      pull: {
+        data: pullResult.rows,
+        count: pullResult.rows.length,
+        hasMore: pullResult.rows.length === 500
+      },
+      meta: {
+        serverTime: serverTime,
+        lastTimestamp: pullResult.rows.length > 0 
+          ? pullResult.rows[pullResult.rows.length - 1].last_modified 
+          : serverTime,
+        windowDays: diasNum
+      }
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error en sync full:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error en sincronización completa',
+      error: err.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// GET - Estado de sincronización del usuario
+router.get('/sync/status', async (req, res) => {
+  try {
+    const { usuario, dias } = req.query;
+    
+    if (!usuario) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Se requiere usuario' 
+      });
+    }
+    
+    const usuarioId = parseInt(usuario);
+    const diasNum = parseInt(dias) || 2;
+    const db = req.app.get('db');
+    
+    // Stats dentro de la ventana de días
+    const statsResult = await db.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE pmmo_estatus = 1) as activos,
+        MAX(GREATEST(pmmo_fechacreacion, COALESCE(pmmo_fechamodificacion, pmmo_fechacreacion))) as ultima_modificacion,
+        MAX(version) as max_version
+      FROM pm_monitoreos
+      WHERE pmmo_creadopor = $1
+        AND pmmo_fecha >= (CURRENT_DATE - INTERVAL '${diasNum} days')
+    `, [usuarioId]);
+    
+    const stats = statsResult.rows[0];
+    
+    res.json({
+      success: true,
+      data: {
+        usuario_id: usuarioId,
+        window_days: diasNum,
+        total_in_window: parseInt(stats.total),
+        activos: parseInt(stats.activos),
+        ultima_modificacion: stats.ultima_modificacion,
+        max_version: parseInt(stats.max_version) || 0,
+        serverTime: new Date().toISOString()
+      }
+    });
+    
+  } catch (err) {
+    console.error('Error en sync status:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo estado de sincronización',
+      error: err.message
+    });
   }
 });
 

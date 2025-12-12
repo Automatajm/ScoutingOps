@@ -9,6 +9,7 @@ import '../unidad_cultivo/unidad_cultivo_management_screen.dart';
 import '../plaga_niveles/plaga_niveles_management_screen.dart';
 import '../lots/lote_management_screen.dart';
 import '../../monitoring/monitoreo_screen.dart';
+import '../plan/pm_plan_management_screen.dart'; // Nueva importación
 
 class HomeScreen extends StatefulWidget {
   final String?
@@ -42,6 +43,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // Variable para controlar si alguna pantalla está en modo edición
   bool _isInEditMode = false;
 
+  // Nueva variable para controlar qué menú está expandido en el sidebar expandido
+  String? _expandedMenu;
+
+  // Nueva variable para controlar el sub-elemento seleccionado
+  String? _selectedSubmenu;
+
   // Función para actualizar el estado de edición
   void setEditMode(bool isEditing) {
     // Verificamos si es seguro llamar a setState
@@ -55,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Definir las opciones de los submenús
+  // Definir las opciones de los submenús - ACTUALIZADO
   final Map<String, List<String>> subMenuOptions = {
     'Home': [], // No tiene submenú
     'Administración': ['Usuarios', 'Roles', 'Permisos', 'Configuración'],
@@ -64,18 +71,16 @@ class _HomeScreenState extends State<HomeScreen> {
       'Variedades',
       'Plagas y Niveles',
       'Lotes',
-      'Monitoreo'
-    ],
-    'Compras e Inventario': [
-      'Tipo proveedores',
-      'Clientes / Proveedores',
-      'Tipos movimientos inventario'
-    ],
-    'Cuentas por pagar': ['Pagos', 'Historial', 'Reportes'],
-    'Caja general': ['Movimientos', 'Cierre diario'],
-    'Facturación': ['Nueva factura', 'Consultar facturas'],
-    'Cuentas por cobrar': ['Cobros', 'Estado de cuenta'],
-    'Reportes': ['Ventas', 'Inventario', 'Finanzas'],
+    ], // Removido 'Monitoreo'
+    'Scouting': [
+      'Monitoreo',
+      'Monitoreo plan'
+    ], // Cambiado nombre y agregado nuevo elemento
+    'Reportes': [
+      'Socouting-farm',
+      'Botados',
+      'Plan-ejecución'
+    ], // Agregado Plan-ejecución
   };
 
   void _hideOverlay() {
@@ -83,8 +88,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _overlayEntry = null;
   }
 
+  // Método _showOverlay solo para sidebar colapsado
   void _showOverlay(BuildContext context, String menuTitle, GlobalKey key) {
-    if (menuTitle == 'Home' || subMenuOptions[menuTitle]!.isEmpty) {
+    if (menuTitle == 'Home' ||
+        subMenuOptions[menuTitle]!.isEmpty ||
+        !isCollapsed) {
       return;
     }
 
@@ -101,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        left: isCollapsed ? 70 : 220,
+        left: 70,
         top: position.dy,
         child: MouseRegion(
           // Cuando el mouse sale del menú, lo ocultamos
@@ -116,8 +124,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ClipRRect(
               // Aseguramos que el contenido también tenga bordes redondeados
               borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 220,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 220,
+                  minWidth: 220,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: subMenuOptions[menuTitle]!
@@ -239,6 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Método _navigateToSubmenu actualizado para incluir el nuevo menú
   void _navigateToSubmenu(String menuTitle, String submenuOption) {
     // Nombre completo del destino
     final destinationTitle =
@@ -251,6 +263,9 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         activeMenu = menuTitle;
         hoveredMenu = null;
+        _expandedMenu = menuTitle; // Mantener expandido el menú padre
+        _selectedSubmenu =
+            '$menuTitle:$submenuOption'; // Marcar el sub-elemento seleccionado
         // Actualizar el ícono actual del menú
         _currentMenuIcon = _getIconForMenu(menuTitle);
 
@@ -278,9 +293,26 @@ class _HomeScreenState extends State<HomeScreen> {
           _currentContent =
               LoteManagementScreen(onEditModeChanged: setEditMode);
           _currentTitle = 'Gestión de Lotes';
-        } else if (menuTitle == 'Generales' && submenuOption == 'Monitoreo') {
+        } else if (menuTitle == 'Scouting' && submenuOption == 'Monitoreo') {
+          // Caso para Scouting -> Monitoreo
           _currentContent = MonitoreoScreen(onEditModeChanged: setEditMode);
           _currentTitle = 'Monitoreo';
+        } else if (menuTitle == 'Scouting' &&
+            submenuOption == 'Monitoreo plan') {
+          // Caso actualizado para Scouting -> Monitoreo plan
+          _currentContent =
+              PmPlanManagementScreen(onEditModeChanged: setEditMode);
+          _currentTitle = 'Planificación de Monitoreo';
+        } else if (menuTitle == 'Reportes' &&
+            submenuOption == 'Plan-ejecución') {
+          // Nuevo caso para Reportes -> Plan-ejecución
+          _currentContent = Center(
+            child: Text(
+              'Pantalla de Plan-ejecución',
+              style: const TextStyle(fontSize: 24),
+            ),
+          );
+          _currentTitle = 'Plan-ejecución';
         } else {
           _currentContent = Center(
             child: Text(
@@ -383,13 +415,14 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
+                _buildCircularNavItem('Administración', 'Usuarios',
+                    Icons.admin_panel_settings, 'Administración', 'Usuarios'),
                 _buildCircularNavItem(
-                    'Administración', 'Proyectos', Icons.admin_panel_settings),
-                _buildCircularNavItem('Generales', 'Almacenes', Icons.settings),
-                _buildCircularNavItem(
-                    'Transacciones', 'SolicitudRequisición', Icons.swap_horiz),
-                _buildCircularNavItem(
-                    'Contabilidad', 'Asientos', Icons.account_balance),
+                    'Generales', 'Lotes', Icons.settings, 'Generales', 'Lotes'),
+                _buildCircularNavItem('Scouting', 'Monitoreo Plan',
+                    Icons.search, 'Scouting', 'Monitoreo plan'),
+                _buildCircularNavItem('Reportes', 'Plan-ejecución',
+                    Icons.analytics, 'Reportes', 'Plan-ejecución'),
               ],
             ),
           ),
@@ -492,6 +525,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () {
                         setState(() {
                           isCollapsed = !isCollapsed;
+                          _expandedMenu =
+                              null; // Cerrar cualquier menú expandido
                           _hideOverlay();
                         });
                       },
@@ -646,6 +681,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                   setState(() {
                                     activeMenu = 'Home';
                                     hoveredMenu = null;
+                                    _expandedMenu =
+                                        null; // Cerrar cualquier menú expandido
+                                    _selectedSubmenu =
+                                        null; // Limpiar selección de sub-elemento
                                     _currentContent = _buildDashboardContent();
                                     _currentTitle = 'Home';
                                     _currentMenuIcon =
@@ -703,99 +742,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
 
-                            // Resto de los menús en ListView
+                            // Resto de los menús - NUEVO DISEÑO EXPANDIBLE
                             Expanded(
-                              child: ListView.builder(
-                                padding: EdgeInsets.zero,
-                                // Excluimos Home del contador de elementos
-                                itemCount: subMenuOptions.length - 1,
-                                itemBuilder: (context, index) {
-                                  // Ajustamos el índice para omitir "Home"
-                                  final realIndex = index +
-                                      1; // Saltamos el primer elemento (Home)
-                                  final menuTitle =
-                                      subMenuOptions.keys.elementAt(realIndex);
-                                  final icon = _getIconForMenu(menuTitle);
-                                  final isActive = activeMenu == menuTitle;
-                                  final isHovered = hoveredMenu == menuTitle;
-                                  final menuKey = GlobalKey();
-
-                                  return InkWell(
-                                    key: menuKey,
-                                    onTap: () {
-                                      // Usar el método general de confirmación
-                                      _confirmPageNavigation(menuTitle, () {
-                                        setState(() {
-                                          activeMenu = menuTitle;
-                                          _currentMenuIcon =
-                                              icon; // Actualizar ícono actual
-                                          _hideOverlay();
-                                        });
-                                      });
-                                    },
-                                    onHover: (isHovering) {
-                                      if (isHovering) {
-                                        setState(() {
-                                          hoveredMenu = menuTitle;
-                                        });
-                                        _showOverlay(
-                                            context, menuTitle, menuKey);
-                                      } else {
-                                        // Si el mouse sale del ítem, limpiamos el estado de hover
-                                        if (hoveredMenu == menuTitle) {
-                                          setState(() {
-                                            hoveredMenu = null;
-                                          });
-                                        }
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: isCollapsed ? 16 : 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isActive
-                                            ? Colors.white.withOpacity(0.1)
-                                            : (isHovered
-                                                ? Colors.white.withOpacity(0.05)
-                                                : Colors.transparent),
-                                        border: isActive
-                                            ? const Border(
-                                                left: BorderSide(
-                                                  color: Colors.white,
-                                                  width: 3,
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          Icon(
-                                            icon,
-                                            color: Colors.white,
-                                            size: 22,
-                                          ),
-                                          if (!isCollapsed) ...[
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                menuTitle,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                              child: _buildMenuList(),
                             ),
                           ],
                         ),
@@ -900,6 +849,176 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // NUEVO MÉTODO: Widget para construir la lista de menús con comportamiento expandible
+  Widget _buildMenuList() {
+    List<Widget> menuWidgets = [];
+
+    // Lista de menús excluyendo Home
+    final menuTitles =
+        subMenuOptions.keys.where((key) => key != 'Home').toList();
+
+    for (String menuTitle in menuTitles) {
+      final icon = _getIconForMenu(menuTitle);
+      final isActive = activeMenu == menuTitle;
+      final isHovered = hoveredMenu == menuTitle;
+      final isExpanded = _expandedMenu == menuTitle;
+      final hasSubItems = subMenuOptions[menuTitle]!.isNotEmpty;
+      final menuKey = GlobalKey();
+
+      // Widget del menú padre
+      menuWidgets.add(
+        InkWell(
+          key: menuKey,
+          onTap: () {
+            if (isCollapsed) {
+              // En modo colapsado, usar confirmación para cambiar página
+              _confirmPageNavigation(menuTitle, () {
+                setState(() {
+                  activeMenu = menuTitle;
+                  _currentMenuIcon = icon;
+                  _hideOverlay();
+                });
+              });
+            } else {
+              // En modo expandido, expandir/contraer al hacer CLICK
+              if (hasSubItems) {
+                setState(() {
+                  // Si es el mismo menú, alternar (abrir/cerrar)
+                  // Si es diferente, abrir el nuevo y cerrar el anterior
+                  _expandedMenu = _expandedMenu == menuTitle ? null : menuTitle;
+                  // Limpiar selección de submenu si cerramos el menú
+                  if (_expandedMenu == null) {
+                    _selectedSubmenu = null;
+                  }
+                });
+              }
+            }
+          },
+          onHover: (isHovering) {
+            if (isCollapsed) {
+              // Solo en modo colapsado usar overlay
+              if (isHovering) {
+                setState(() {
+                  hoveredMenu = menuTitle;
+                });
+                _showOverlay(context, menuTitle, menuKey);
+              } else {
+                if (hoveredMenu == menuTitle) {
+                  setState(() {
+                    hoveredMenu = null;
+                  });
+                }
+              }
+            }
+            // En modo expandido, NO hacer nada en hover, solo click
+          },
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: isCollapsed ? 16 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? Colors.white.withOpacity(0.1)
+                  : (isHovered
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.transparent),
+              border: isActive
+                  ? const Border(
+                      left: BorderSide(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                    )
+                  : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                if (!isCollapsed) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      menuTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // Indicador de expansión para menús con sub-elementos
+                  if (hasSubItems)
+                    Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Si está expandido y no está colapsado, mostrar sub-elementos
+      if (isExpanded && !isCollapsed && hasSubItems) {
+        for (String subOption in subMenuOptions[menuTitle]!) {
+          final isSelectedSubmenu = _selectedSubmenu == '$menuTitle:$subOption';
+
+          menuWidgets.add(
+            InkWell(
+              onTap: () {
+                _navigateToSubmenu(menuTitle, subOption);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(
+                  left: 48, // Indentación para sub-elementos
+                  right: 16,
+                  top: 8,
+                  bottom: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelectedSubmenu
+                      ? const Color(0xFF00A99D).withOpacity(
+                          0.8) // Color distintivo para el elemento seleccionado
+                      : Colors.white.withOpacity(0.05),
+                  borderRadius:
+                      isSelectedSubmenu ? BorderRadius.circular(4) : null,
+                ),
+                child: Text(
+                  subOption,
+                  style: TextStyle(
+                    color: isSelectedSubmenu
+                        ? Colors.white // Texto más blanco para el seleccionado
+                        : Colors.white.withOpacity(0.9),
+                    fontSize: 13,
+                    fontWeight:
+                        isSelectedSubmenu ? FontWeight.w500 : FontWeight.normal,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        children: menuWidgets,
+      ),
+    );
+  }
+
+  // Método _getIconForMenu actualizado para incluir el nuevo ícono
   IconData _getIconForMenu(String menuTitle) {
     switch (menuTitle) {
       case 'Home':
@@ -908,16 +1027,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.admin_panel_settings;
       case 'Generales':
         return Icons.settings;
-      case 'Compras e Inventario':
-        return Icons.shopping_cart;
-      case 'Cuentas por pagar':
-        return Icons.account_balance_wallet;
-      case 'Caja general':
-        return Icons.point_of_sale;
-      case 'Facturación':
-        return Icons.receipt;
-      case 'Cuentas por cobrar':
-        return Icons.payments;
+      case 'Scouting': // Cambiado nombre del menú
+        return Icons.search; // Ícono de búsqueda/exploración
       case 'Reportes':
         return Icons.analytics;
       default:
@@ -1121,36 +1232,44 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCircularNavItem(String title, String subtitle, IconData icon) {
+  Widget _buildCircularNavItem(String title, String subtitle, IconData icon,
+      String menuTitle, String submenuOption) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E73BB),
-              borderRadius: BorderRadius.circular(50),
+      child: InkWell(
+        onTap: () {
+          // Navegar directamente al submenu especificado
+          _navigateToSubmenu(menuTitle, submenuOption);
+        },
+        borderRadius: BorderRadius.circular(50),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E73BB),
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Icon(icon, color: Colors.white, size: 24),
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[500]!,
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500]!,
+              ),
             ),
-          ),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

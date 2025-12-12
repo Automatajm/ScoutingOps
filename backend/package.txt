@@ -1,0 +1,111 @@
+{
+  "name": "pest-control-backend",
+  "version": "1.0.0",
+  "description": "Backend for Pest Control App - Sistema de Control de Plagas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    
+    "dev:development": "powershell \"Copy-Item '../.env.development' '.env' -Force; if ($?) { nodemon server.js }\"",
+    "dev:staging": "powershell \"Copy-Item '../.env.staging' '.env' -Force; if ($?) { nodemon server.js }\"",
+    "dev:production": "powershell \"Copy-Item '../.env.production' '.env' -Force; if ($?) { nodemon server.js }\"",
+    "dev:local": "powershell \"Copy-Item '../.env.local' '.env' -Force; if ($?) { nodemon server.js }\"",
+    "dev:docker": "powershell \"Copy-Item '../.env.docker' '.env' -Force; if ($?) { nodemon server.js }\"",
+    
+    "start:dev": "powershell \"Copy-Item '../.env.development' '.env' -Force; if ($?) { node server.js }\"",
+    "start:staging": "powershell \"Copy-Item '../.env.staging' '.env' -Force; if ($?) { node server.js }\"",
+    "start:prod": "powershell \"Copy-Item '../.env.production' '.env' -Force; if ($?) { node server.js }\"",
+    "start:local": "powershell \"Copy-Item '../.env.local' '.env' -Force; if ($?) { node server.js }\"",
+    
+    "staging": "npm run dev:staging",
+    "prod": "npm run dev:production",
+    "development": "npm run dev:development",
+    "local": "npm run dev:local",
+    
+    "deploy:prod": "powershell \"Copy-Item '../.env.production' '.env' -Force; if ($?) { Write-Host 'Production environment set'; node server.js }\"",
+    
+    "env:dev": "powershell \"Copy-Item '../.env.development' '.env' -Force; Write-Host 'Switched to DEVELOPMENT environment' -ForegroundColor Green\" && npm run check:config",
+    "env:staging": "powershell \"Copy-Item '../.env.staging' '.env' -Force; Write-Host 'Switched to STAGING environment' -ForegroundColor Yellow\" && npm run check:config",
+    "env:prod": "powershell \"Copy-Item '../.env.production' '.env' -Force; Write-Host 'Switched to PRODUCTION environment' -ForegroundColor Red\" && npm run check:config",
+    "env:local": "powershell \"Copy-Item '../.env.local' '.env' -Force; Write-Host 'Switched to LOCAL environment' -ForegroundColor Cyan\" && npm run check:config",
+    "env:docker": "powershell \"Copy-Item '../.env.docker' '.env' -Force; Write-Host 'Switched to DOCKER environment' -ForegroundColor Blue\" && npm run check:config",
+    
+    "test:connection": "node -e \"require('./db').query('SELECT NOW()').then(() => console.log('✅ DB Connected')).catch(err => console.error('❌ DB Error:', err.message))\"",
+    "test:ssl": "powershell \"if (Test-Path '../cert.pem') { Write-Host '✅ SSL Certificates found' -ForegroundColor Green } else { Write-Host '❌ SSL Certificates missing - using HTTP' -ForegroundColor Yellow }\"",
+    "test:env": "node -e \"require('dotenv').config(); console.log('🔍 Environment Test:'); console.log('NODE_ENV:', process.env.NODE_ENV || 'not set'); console.log('ENVIRONMENT:', process.env.ENVIRONMENT || 'not set'); console.log('PORT:', process.env.PORT || 'not set'); console.log('DB_HOST:', process.env.DB_HOST || 'not set');\"",
+    
+    "check:config": "node -e \"const config = require('./config'); console.log('📋 Current Config:'); console.log('Environment:', config.environment); console.log('Port:', config.port); console.log('API URL:', config.apiUrl); console.log('SSL Enabled:', config.ssl ? config.ssl.enabled : 'Not configured'); console.log('DB Host:', config.database ? config.database.host : 'Not configured');\"",
+    "check:env": "powershell \"if (Test-Path '.env') { Get-Content '.env' | Where-Object { $_ -notmatch 'PASSWORD|SECRET|KEY' } } else { Write-Host 'No .env file found' -ForegroundColor Yellow }\"",
+    "check:all-envs": "powershell \"Write-Host 'Available .env files in parent directory:' -ForegroundColor Cyan; Get-ChildItem '../*.env*' | Select-Object Name\"",
+    "check:production": "npm run check:env && npm run test:ssl && npm run test:connection",
+    "check:security": "node -e \"const config = require('./config'); console.log('🔒 Security Check:'); console.log('JWT Secret:', config.security && config.security.jwtSecret !== 'fallback-secret-key' ? '✅ Custom' : '⚠️ Default'); console.log('SSL Enabled:', config.ssl && config.ssl.enabled ? '✅ Yes' : '❌ No'); console.log('Environment:', config.environment);\"",
+    
+    "validate:env": "npm run test:env",
+    "validate:all": "npm run check:config && npm run test:connection && npm run check:security",
+    
+    "build": "powershell \"Write-Host 'No build step required for Node.js backend' -ForegroundColor Green\"",
+    "lint": "powershell \"Write-Host 'Linting not configured yet - consider adding ESLint' -ForegroundColor Yellow\"",
+    
+    "health": "powershell \"Write-Host 'Visit https://localhost:8000/api/health for health check' -ForegroundColor Cyan\"",
+    "status": "powershell \"Write-Host 'Visit https://localhost:8000/api/system/status for system status' -ForegroundColor Cyan\"",
+    "diagnostics": "powershell \"Write-Host 'Visit https://localhost:8000/api/diagnostico for full diagnostics' -ForegroundColor Cyan\"",
+    
+    "logs:prod": "powershell \"Write-Host 'Production logs are minimal for security' -ForegroundColor Yellow\"",
+    "backup:check": "powershell \"Write-Host 'DB backup configuration: enabled with 7-day retention' -ForegroundColor Green\"",
+    
+    "clean": "powershell \"if (Test-Path '.env') { Remove-Item '.env' -Force; Write-Host '.env file removed' -ForegroundColor Green } else { Write-Host 'No .env file to clean' -ForegroundColor Yellow }\"",
+    "reset:env": "npm run clean && powershell \"Write-Host 'Environment reset - select new environment with npm run env:xxx' -ForegroundColor Cyan\"",
+    
+    "quick:dev": "npm run env:dev && powershell \"Start-Sleep 1\" && npm run dev",
+    "quick:staging": "npm run env:staging && powershell \"Start-Sleep 1\" && npm run dev",
+    "quick:prod": "npm run env:prod && powershell \"Start-Sleep 1\" && npm run start",
+    
+    "list:envs": "powershell \"Write-Host 'Available .env files in parent directory:' -ForegroundColor Cyan; Get-ChildItem '../*.env*' | ForEach-Object { Write-Host '  ' $_.Name -ForegroundColor White }\"",
+    "show:structure": "powershell \"Write-Host 'Project structure:' -ForegroundColor Cyan; Write-Host 'pestcontrol/' -ForegroundColor White; Write-Host '  backend/ (you are here)' -ForegroundColor Green; Write-Host '  frontend/' -ForegroundColor White; Write-Host '  .env.development' -ForegroundColor Yellow; Write-Host '  .env.staging' -ForegroundColor Yellow; Write-Host '  .env.production' -ForegroundColor Yellow\"",
+    "show:current-env": "powershell \"Write-Host 'Current environment file content:' -ForegroundColor Cyan; if (Test-Path '.env') { Get-Content '.env' | Where-Object { $_ -notmatch 'PASSWORD|SECRET|KEY' } | ForEach-Object { Write-Host '  ' $_ -ForegroundColor White } } else { Write-Host '  No .env file found' -ForegroundColor Red }\"",
+    
+    "kill:node": "powershell \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Host 'All Node.js processes stopped' -ForegroundColor Green\"",
+    "port:check": "powershell \"Write-Host 'Checking port 8000:' -ForegroundColor Cyan; Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,State\"",
+    
+    "fix:permissions": "powershell \"Write-Host 'Setting execution policy for current session...' -ForegroundColor Yellow; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force\"",
+    
+    "help": "powershell \"Write-Host 'Available commands:' -ForegroundColor Cyan; Write-Host '  npm run dev:development  - Run in development mode' -ForegroundColor White; Write-Host '  npm run staging          - Quick staging mode' -ForegroundColor White; Write-Host '  npm run prod            - Quick production mode' -ForegroundColor White; Write-Host '  npm run env:dev         - Switch to development env' -ForegroundColor White; Write-Host '  npm run list:envs       - Show available .env files' -ForegroundColor White; Write-Host '  npm run check:config    - Show current configuration' -ForegroundColor White; Write-Host '  npm run validate:all    - Complete validation' -ForegroundColor White\""
+  },
+  "keywords": [
+    "pest-control",
+    "agriculture",
+    "monitoring",
+    "nodejs",
+    "express",
+    "postgresql",
+    "security",
+    "powershell"
+  ],
+  "author": "Costa Analytics Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.0.1",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Automatajm/ScoutingOps.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Automatajm/ScoutingOps/issues"
+  },
+  "homepage": "https://github.com/Automatajm/ScoutingOps#readme"
+}

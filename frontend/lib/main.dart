@@ -1,23 +1,26 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'data/datasources/auth_service.dart';
+import 'data/database/app_database.dart';
 import 'services/intranet_service.dart';
 import 'services/service_provider.dart';
+import 'services/offline_database_service.dart';
+import 'services/catalog_sync_service.dart';
 import 'presentation/widgets/session_timeout_handler.dart';
 import 'core/routes/routes_manager.dart';
 import 'core/config/flavor_config.dart';
 import 'presentation/pages/auth/configuration_screen.dart';
+import 'services/lote_service.dart';
 
-// Clase de inicialización de la aplicación
 class AppInitializer {
   static OverlayState? get overlayState =>
       AuthService.navigatorKey.currentState?.overlay;
 }
 
-// Navegador de autenticación
 class AuthNavigator extends StatelessWidget {
   final AuthService authService;
   final Widget child;
@@ -34,7 +37,6 @@ class AuthNavigator extends StatelessWidget {
   }
 }
 
-// Clase de inicio de la aplicación
 class AppStartup extends StatefulWidget {
   final Widget child;
   final ApiConfig apiConfig;
@@ -61,25 +63,9 @@ class _AppStartupState extends State<AppStartup> {
 
   Future<void> _initializeApp() async {
     try {
-      if (mounted) {
-        Logger.debug('Iniciando verificación de configuración...');
-      }
-
-      // IMPORTANTE: Verificar si ya tenemos una configuración válida
       final isConfigured = widget.apiConfig.isConfigured;
       final hasValidUrls = widget.apiConfig.baseUrl.isNotEmpty &&
           widget.apiConfig.apiUrl.isNotEmpty;
-
-      if (mounted) {
-        Logger.debug('Estado de configuración', {
-          'baseUrl': widget.apiConfig.baseUrl,
-          'apiUrl': widget.apiConfig.apiUrl,
-          'isConfigured': isConfigured,
-          'hasValidUrls': hasValidUrls,
-          'environment': widget.apiConfig.environment,
-          'version': widget.apiConfig.version,
-        });
-      }
 
       final needsConfig = !isConfigured || !hasValidUrls;
 
@@ -88,12 +74,9 @@ class _AppStartupState extends State<AppStartup> {
           _isInitializing = false;
           _needsConfiguration = needsConfig;
         });
-
-        Logger.info(
-            'Inicialización completada', {'needsConfiguration': needsConfig});
       }
     } catch (e) {
-      Logger.error('Error inicializando la app', e);
+      debugPrint('Error inicializando: $e');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -109,11 +92,6 @@ class _AppStartupState extends State<AppStartup> {
       final hasValidUrls = widget.apiConfig.baseUrl.isNotEmpty &&
           widget.apiConfig.apiUrl.isNotEmpty;
 
-      Logger.debug('Refrescando estado de configuración', {
-        'isConfigured': isConfigured,
-        'hasValidUrls': hasValidUrls,
-      });
-
       setState(() {
         _needsConfiguration = !isConfigured || !hasValidUrls;
       });
@@ -122,7 +100,6 @@ class _AppStartupState extends State<AppStartup> {
 
   @override
   Widget build(BuildContext context) {
-    // SPLASH SCREEN
     if (_isInitializing) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -139,43 +116,28 @@ class _AppStartupState extends State<AppStartup> {
                     color: const Color(0xFF49B8E2),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(
-                    Icons.pest_control,
-                    size: 60,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.pest_control,
+                      size: 60, color: Colors.white),
                 ),
                 const SizedBox(height: 24),
                 const CircularProgressIndicator(
-                  color: Color(0xFF49B8E2),
-                  strokeWidth: 3,
-                ),
+                    color: Color(0xFF49B8E2), strokeWidth: 3),
                 const SizedBox(height: 24),
-                const Text(
-                  'Pest Control',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF49B8E2),
-                  ),
-                ),
+                const Text('Pest Control',
+                    style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF49B8E2))),
                 const SizedBox(height: 8),
-                const Text(
-                  'Costa Analytics',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                const Text('Costa Analytics',
+                    style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 40),
-                Text(
-                  'Inicializando aplicación...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
+                Text('Inicializando...',
+                    style:
+                        TextStyle(fontSize: 14, color: Colors.grey.shade600)),
               ],
             ),
           ),
@@ -183,118 +145,90 @@ class _AppStartupState extends State<AppStartup> {
       );
     }
 
-    // PANTALLA DE CONFIGURACIÓN
     if (_needsConfiguration) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF49B8E2),
-            primary: const Color(0xFF49B8E2),
-          ),
+              seedColor: const Color(0xFF49B8E2),
+              primary: const Color(0xFF49B8E2)),
           useMaterial3: true,
         ),
         home: ConfigurationScreen(
           apiConfig: widget.apiConfig,
-          onConfigSuccess: () {
-            Logger.info('Configuración completada exitosamente', {
-              'baseUrl': widget.apiConfig.baseUrl,
-              'apiUrl': widget.apiConfig.apiUrl,
-              'isConfigured': widget.apiConfig.isConfigured,
-            });
-            _refreshConfigurationState();
-          },
+          onConfigSuccess: () => _refreshConfigurationState(),
         ),
       );
     }
 
-    // APP PRINCIPAL
-    Logger.info('Lanzando app principal con configuración válida');
     return widget.child;
   }
 }
 
 void main() async {
-  debugPrint('🚀 Iniciando aplicación Pest Control...');
-
-  // Asegurar inicialización de Flutter
+  debugPrint('🚀 Iniciando Pest Control...');
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configurar orientación
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
   try {
-    // PASO 1: Cargar variables de entorno
-    debugPrint('🔧 Cargando variables de entorno...');
+    // Cargar .env
     try {
       await dotenv.load(fileName: '.env.development');
     } catch (e) {
-      debugPrint('⚠️ No se pudo cargar .env.development: $e');
+      debugPrint('⚠️ No se pudo cargar .env: $e');
     }
 
-    // PASO 2: Inicializar FlavorConfig
-    debugPrint('🔧 Inicializando FlavorConfig...');
+    // Inicializar FlavorConfig
     await FlavorConfig.initialize(Flavor.development);
-
-    // PASO 3: Obtener ApiConfig
-    debugPrint('🔧 Obteniendo instancia de ApiConfig...');
     final apiConfig = FlavorConfig.apiConfig;
 
-    if (kDebugMode) {
-      debugPrint('📊 Estado inicial de ApiConfig: '
-          'baseUrl: ${apiConfig.baseUrl}, '
-          'apiUrl: ${apiConfig.apiUrl}, '
-          'isConfigured: ${apiConfig.isConfigured}, '
-          'environment: ${apiConfig.environment}');
-    }
+    debugPrint(
+        '📊 ApiConfig: baseUrl=${apiConfig.baseUrl}, apiUrl=${apiConfig.apiUrl}');
 
-    // PASO 4: Inicializar servicio de intranet
-    debugPrint('🔧 Inicializando servicio de intranet...');
+    // Inicializar IntranetService
     final intranetService = IntranetService();
     await intranetService.initialize();
 
-    // PASO 5: Configurar manejador de errores global
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (FlavorConfig.isProduction) {
-        debugPrint(
-            '❌ CRITICAL ERROR [REF-${DateTime.now().millisecondsSinceEpoch}]');
-      } else {
-        debugPrint('❌ ERROR: ${details.exception}');
-        if (kDebugMode) {
-          debugPrint('Stack trace: ${details.stack}');
-        }
-      }
+    // Inicializar SQLite
+    debugPrint('🔧 Inicializando SQLite...');
+    final database = AppDatabase();
+    final offlineDbService = OfflineDatabaseService(database);
+    await offlineDbService.initialize();
+
+    final dbStats = await offlineDbService.getStorageStats();
+    debugPrint('📦 SQLite inicializado: $dbStats');
+
+    LoteService().setDatabase(database);
+    debugPrint('📦 LoteService configurado con SQLite');
+
+    // Manejador de errores
+    FlutterError.onError = (details) {
+      debugPrint('❌ ERROR: ${details.exception}');
       FlutterError.presentError(details);
     };
 
-    debugPrint('✅ Inicialización completada, lanzando app...');
+    debugPrint('✅ Lanzando app...');
 
-    // PASO 6: Lanzar la aplicación
     runApp(
       AppStartup(
         apiConfig: apiConfig,
         child: ServiceProvider(
           apiConfig: apiConfig,
           intranetService: intranetService,
+          database: database,
+          offlineDbService: offlineDbService,
           child: const MyApp(),
         ),
       ),
     );
   } catch (e, stackTrace) {
-    if (FlavorConfig.isProduction) {
-      debugPrint(
-          '❌ STARTUP ERROR [REF-${DateTime.now().millisecondsSinceEpoch}]');
-    } else {
-      debugPrint('❌ Error crítico durante la inicialización: $e');
-      if (kDebugMode) {
-        debugPrint('Stack trace completo: $stackTrace');
-      }
-    }
+    debugPrint('❌ Error crítico: $e');
+    debugPrint('Stack: $stackTrace');
 
-    // App de emergencia
     runApp(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -306,39 +240,27 @@ void main() async {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 80,
-                    color: Colors.red.shade600,
-                  ),
+                  Icon(Icons.error_outline,
+                      size: 80, color: Colors.red.shade600),
                   const SizedBox(height: 20),
-                  Text(
-                    'Error de Inicialización',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade800,
-                    ),
-                  ),
+                  Text('Error de Inicialización',
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade800)),
                   const SizedBox(height: 16),
                   Text(
-                    'La aplicación no pudo inicializarse correctamente. Por favor, reinicie la aplicación.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.red.shade700,
-                    ),
-                  ),
+                      'La aplicación no pudo inicializarse. Reinicie la aplicación.',
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(fontSize: 16, color: Colors.red.shade700)),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: () {
-                      SystemNavigator.pop();
-                    },
+                    onPressed: () => SystemNavigator.pop(),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade600,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Cerrar aplicación'),
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white),
+                    child: const Text('Cerrar'),
                   ),
                 ],
               ),
@@ -350,8 +272,15 @@ void main() async {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _catalogSyncInitiated = false;
 
   @override
   Widget build(BuildContext context) {
@@ -360,53 +289,39 @@ class MyApp extends StatelessWidget {
         final intranetService =
             Provider.of<IntranetService>(context, listen: false);
 
+        // Iniciar sincronización de catálogos una vez
+        if (!_catalogSyncInitiated) {
+          _catalogSyncInitiated = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _initCatalogSync(context);
+          });
+        }
+
         return MaterialApp(
           title: 'Pest Control - Costa Analytics',
           debugShowCheckedModeBanner: false,
           navigatorKey: AuthService.navigatorKey,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF49B8E2),
-              primary: const Color(0xFF49B8E2),
-            ),
+                seedColor: const Color(0xFF49B8E2),
+                primary: const Color(0xFF49B8E2)),
             useMaterial3: true,
             appBarTheme: AppBarTheme(
               backgroundColor: Colors.white,
               elevation: 0,
               centerTitle: false,
-              iconTheme: const IconThemeData(
-                color: Color(0xFF49B8E2),
-              ),
+              iconTheme: const IconThemeData(color: Color(0xFF49B8E2)),
               titleTextStyle: TextStyle(
-                color: Colors.grey.shade800,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            textTheme: TextTheme(
-              bodyLarge: TextStyle(color: Colors.grey.shade800),
-              bodyMedium: TextStyle(color: Colors.grey.shade700),
+                  color: Colors.grey.shade800,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold),
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF49B8E2),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 2,
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: Color(0xFF49B8E2),
-                  width: 2,
-                ),
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -418,20 +333,16 @@ class MyApp extends StatelessWidget {
             Widget wrappedChild = SessionTimeoutHandler(
               authService: authService,
               child: AuthNavigator(
-                authService: authService,
-                child: child ?? const SizedBox.shrink(),
-              ),
+                  authService: authService,
+                  child: child ?? const SizedBox.shrink()),
             );
 
             final currentRouteName = ModalRoute.of(context)?.settings.name;
             final isLoginScreen = currentRouteName == RoutesManager.login ||
                 currentRouteName == null;
 
-            if (isLoginScreen) {
-              return wrappedChild;
-            }
+            if (isLoginScreen) return wrappedChild;
 
-            // Indicador de conectividad
             return Stack(
               children: [
                 wrappedChild,
@@ -450,23 +361,18 @@ class MyApp extends StatelessWidget {
                           onTap: () {
                             intranetService.refreshConnection();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Row(
-                                  children: [
-                                    SizedBox(
+                              const SnackBar(
+                                content: Row(children: [
+                                  SizedBox(
                                       width: 16,
                                       height: 16,
                                       child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Verificando conexión...'),
-                                  ],
-                                ),
-                                backgroundColor: const Color(0xFF49B8E2),
-                                duration: const Duration(seconds: 2),
+                                          strokeWidth: 2, color: Colors.white)),
+                                  SizedBox(width: 12),
+                                  Text('Verificando conexión...'),
+                                ]),
+                                backgroundColor: Color(0xFF49B8E2),
+                                duration: Duration(seconds: 2),
                               ),
                             );
                           },
@@ -475,36 +381,24 @@ class MyApp extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: Colors.red.shade100,
                               border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.red.shade300,
-                                  width: 1,
-                                ),
-                              ),
+                                  bottom: BorderSide(
+                                      color: Colors.red.shade300, width: 1)),
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.wifi_off,
-                                  size: 16,
-                                  color: Colors.red.shade800,
-                                ),
+                                Icon(Icons.wifi_off,
+                                    size: 16, color: Colors.red.shade800),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Sin conexión - Modo offline',
-                                  style: TextStyle(
-                                    color: Colors.red.shade800,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
+                                Text('Sin conexión - Modo offline',
+                                    style: TextStyle(
+                                        color: Colors.red.shade800,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500)),
                                 const SizedBox(width: 8),
-                                Icon(
-                                  Icons.refresh,
-                                  size: 16,
-                                  color: Colors.red.shade800,
-                                ),
+                                Icon(Icons.refresh,
+                                    size: 16, color: Colors.red.shade800),
                               ],
                             ),
                           ),
@@ -522,5 +416,16 @@ class MyApp extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _initCatalogSync(BuildContext context) {
+    try {
+      final catalogSync =
+          Provider.of<CatalogSyncService>(context, listen: false);
+      debugPrint('📦 Iniciando sincronización de catálogos...');
+      catalogSync.syncCatalogsIfNeeded();
+    } catch (e) {
+      debugPrint('⚠️ Error iniciando sync de catálogos: $e');
+    }
   }
 }

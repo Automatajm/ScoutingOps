@@ -23,6 +23,47 @@ const logQueryError = (error, query, params) => {
   }
 };
 
+// GET - Obtener TODOS los niveles de infestación activos (para sync)
+router.get('/', async (req, res) => {
+  try {
+    console.log('Obteniendo todos los niveles de infestación para sincronización');
+    
+    const db = req.app.get('db');
+    
+    const result = await db.query(`
+      SELECT 
+        pmni_secuencia,
+        pmni_plaga,
+        pmni_nombrecomun,
+        pmni_lminferior,
+        pmni_lmsuperior,
+        pmni_nivel,
+        pmni_rango,
+        pmni_tipoobservacion,
+        pmni_observacion,
+        pmni_cintaidentificadora,
+        pmni_estatus
+      FROM pm_nivelesinfestacion 
+      WHERE pmni_estatus = 1
+      ORDER BY pmni_nombrecomun, pmni_nivel
+    `);
+    
+    console.log('Niveles de infestación obtenidos:', result.rows.length);
+    
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('Error al obtener niveles:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener niveles de infestación',
+      error: err.message
+    });
+  }
+});
+
 // GET - Obtener niveles de infestación por plaga usando stored procedure
 router.get('/plaga/:id', async (req, res) => {
   try {

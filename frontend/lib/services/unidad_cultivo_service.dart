@@ -15,11 +15,79 @@ class UnidadCultivoService {
   // Getter para URL de unidades de cultivo usando ApiConfig
   String get unidadesCultivoUrl => ApiConfig().unidadesCultivoUrl;
 
+  // NUEVO MÉTODO: Obtener ubicaciones únicas de unidades de cultivo
+  Future<List<String>> getUbicaciones() async {
+    int maxRetries = 2;
+    int retryDelay = 1000; // milisegundos
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final uri = Uri.parse('$unidadesCultivoUrl/ubicaciones');
+
+        print('Obteniendo ubicaciones desde: $uri (intento $attempt)');
+
+        final response =
+            await http.get(uri).timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200) {
+          final dynamic jsonData = json.decode(response.body);
+
+          if (jsonData is Map<String, dynamic> &&
+              jsonData.containsKey('data')) {
+            final List<dynamic> ubicacionesData = jsonData['data'];
+            final List<String> ubicaciones = ubicacionesData
+                .map((ubicacion) => ubicacion.toString())
+                .where((ubicacion) => ubicacion.isNotEmpty)
+                .toList();
+
+            print('Ubicaciones obtenidas exitosamente: ${ubicaciones.length}');
+            return ubicaciones;
+          } else {
+            throw Exception(
+                'Formato de respuesta no reconocido para ubicaciones');
+          }
+        } else {
+          print('Error ${response.statusCode}: ${response.body}');
+          throw Exception(
+              'Error al cargar ubicaciones: ${response.statusCode}');
+        }
+      } on SocketException {
+        print('Error de conexión (intento $attempt)');
+        if (attempt == maxRetries) {
+          throw Exception(
+              'Error de conexión. Verifique su conexión a internet y la configuración del servidor.');
+        }
+        print('Reintentando en ${retryDelay / 1000} segundos...');
+        await Future.delayed(Duration(milliseconds: retryDelay));
+        retryDelay *= 2;
+      } on TimeoutException {
+        print('Tiempo de espera agotado (intento $attempt)');
+        if (attempt == maxRetries) {
+          throw Exception(
+              'Tiempo de espera agotado. El servidor está tardando demasiado en responder.');
+        }
+        print('Reintentando en ${retryDelay / 1000} segundos...');
+        await Future.delayed(Duration(milliseconds: retryDelay));
+        retryDelay *= 2;
+      } catch (e) {
+        print('Error no manejado (intento $attempt): $e');
+        if (attempt == maxRetries) {
+          throw Exception('Error inesperado: $e');
+        }
+        print('Reintentando en ${retryDelay / 1000} segundos...');
+        await Future.delayed(Duration(milliseconds: retryDelay));
+        retryDelay *= 2;
+      }
+    }
+
+    throw Exception('Error inesperado en getUbicaciones()');
+  }
+
   // Obtener todas las unidades de cultivo usando stored procedure
-  // Método actualizado para getUnidadesCultivo en el servicio Flutter
   Future<List<UnidadCultivo>> getUnidadesCultivo({
     String? busqueda,
     String? estatus,
+    String? ubicacion, // NUEVO PARÁMETRO
   }) async {
     int maxRetries = 2;
     int retryDelay = 1000; // milisegundos
@@ -36,6 +104,10 @@ class UnidadCultivoService {
 
         if (estatus != null && estatus != 'Todos') {
           queryParams['estatus'] = estatus;
+        }
+
+        if (ubicacion != null && ubicacion.isNotEmpty && ubicacion != 'Todos') {
+          queryParams['ubicacion'] = ubicacion;
         }
 
         final uri =
@@ -220,7 +292,6 @@ class UnidadCultivoService {
             'Creando nueva unidad de cultivo: ${unidad.codigo} (intento $attempt)');
 
         // Obtener los datos para enviar usando el método toJson del modelo
-        // Esto aprovecha la lógica específica implementada en el modelo
         final Map<String, dynamic> bodyData = unidad.toJson();
 
         // Asegurar que los nombres de los campos sigan la convención del backend
@@ -338,7 +409,6 @@ class UnidadCultivoService {
             'Actualizando unidad de cultivo secuencia: ${unidad.secuencia} (intento $attempt)');
 
         // Obtener los datos para enviar usando el método toJson del modelo
-        // Esto aprovecha la lógica específica implementada en el modelo
         final Map<String, dynamic> bodyData = unidad.toJson();
 
         // Asegurar que los nombres de los campos sigan la convención del backend

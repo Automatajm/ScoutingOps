@@ -129,6 +129,11 @@ class _ConsultaTabState extends State<ConsultaTab> {
   void initState() {
     super.initState();
     _initializeColumnWidths();
+
+    // ✅ NUEVO: Mostrar mensaje temporal de modo filtrado al inicializar (solo una vez)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showFilteredModeMessageIfNeeded();
+    });
   }
 
   @override
@@ -148,6 +153,13 @@ class _ConsultaTabState extends State<ConsultaTab> {
         widget.columnWidths[title] = column['width'] as double;
       }
     }
+  }
+
+  // ✅ NUEVO: Mostrar mensaje temporal de modo filtrado (solo si es necesario)
+  void _showFilteredModeMessageIfNeeded() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+
+    //modal filtro por usuarios eliminado por juan mendoza
   }
 
   // Aplicar ordenamiento a los datos
@@ -222,7 +234,6 @@ class _ConsultaTabState extends State<ConsultaTab> {
     final monitoreoService =
         Provider.of<MonitoreoService>(context, listen: false);
     final currentUserId = authService.getCurrentUserId();
-    final isFilteredByUser = authService.mustFilterByUser;
 
     // Obtener datos ordenados
     final sortedData = _getSortedData();
@@ -232,33 +243,7 @@ class _ConsultaTabState extends State<ConsultaTab> {
       padding: EdgeInsets.all(widget.isSmallScreen ? 8 : 16),
       child: Column(
         children: [
-          // Banner de modo filtrado
-          if (isFilteredByUser)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.filter_alt,
-                      color: Colors.amber.shade800, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Modo monitoreador: Solo puedes ver y editar los monitoreos creados por ti.',
-                      style: TextStyle(
-                          color: Colors.amber.shade800,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // ✅ REMOVIDO: Banner persistente de modo filtrado (ahora es mensaje temporal)
 
           // Banner de cambios pendientes
           if (widget.pendingChangesCount > 0)
@@ -557,7 +542,7 @@ class _ConsultaTabState extends State<ConsultaTab> {
     );
   }
 
-  // Layout para pantallas móviles con corrección completa para evitar el desbordamiento
+  // Layout para pantallas móviles con paginación fija mejorada
   Widget _buildMobileLayout(
     List<Monitoreo> sortedData,
     int currentUserId,
@@ -566,302 +551,308 @@ class _ConsultaTabState extends State<ConsultaTab> {
     List<String> filtrosCanteros,
     List<String> filtrosVariedades,
   ) {
-    // CORRECCIÓN: Usamos una estructura con Expanded para asegurar que cada sección
-    // tenga el espacio adecuado y evitar desbordamientos
     return Column(
       children: [
-        // CORRECCIÓN: Ahora toda la sección de filtros está dentro de un Flexible con SingleChildScrollView
-        // para permitir el desplazamiento cuando sea necesario
-        Flexible(
-          // El valor flex: 1 significa que tomará menos espacio que la lista de resultados
-          flex: 1,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: 1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Título y control de expansión
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isFilterExpanded = !_isFilterExpanded;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Filtros de búsqueda',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: MonitoreoStyles.primaryColor,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            _isFilterExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
-                            color: Colors.grey.shade600,
-                          ),
-                        ],
-                      ),
-                    ),
+        // SECCIÓN SUPERIOR: Filtros + Resultados (ocupa todo el espacio disponible)
+        Expanded(
+          child: Column(
+            children: [
+              // FILTROS: Tamaño fijo cuando está expandido
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: _isFilterExpanded
+                    ? 400
+                    : 60, // Altura fija cuando está expandido
+                child: Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.grey.shade200),
                   ),
-
-                  // Contenido expandible
-                  AnimatedCrossFade(
-                    firstChild: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      child: Column(
-                        children: [
-                          // Campo Lote/Código
-                          _buildFilterFormField(
-                            label: 'Lote / Código',
-                            hint: 'Buscar por lote o código',
-                            controller: widget.searchController,
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Campo Plaga
-                          _buildFilterDropdown(
-                            label: 'Plaga',
-                            hint: 'Seleccione plaga',
-                            options: filtrosPlagas,
-                            value: widget.selectedPlaga,
-                            onChanged: (value) {
-                              widget.onPlagaChanged(
-                                  value == 'Todas' ? null : value);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Campo Estado
-                          _buildFilterDropdown(
-                            label: 'Estado',
-                            hint: 'Seleccione estado',
-                            options: ['Todos', 'Activo', 'Inactivo'],
-                            value: widget.selectedEstado,
-                            onChanged: (value) {
-                              widget.onEstadoChanged(
-                                  value == 'Todos' ? null : value);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Filtros adicionales en una tarjeta expandible
-                          Card(
-                            margin: EdgeInsets.zero,
-                            elevation: 0,
-                            color: Colors.grey.shade50,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: Colors.grey.shade200),
-                            ),
-                            child: ExpansionTile(
-                              title: const Text('Filtros adicionales',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Título y control de expansión (siempre visible)
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isFilterExpanded = !_isFilterExpanded;
+                          });
+                        },
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Filtros de búsqueda',
                                   style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500)),
-                              textColor: MonitoreoStyles.primaryColor,
-                              iconColor: MonitoreoStyles.primaryColor,
-                              collapsedBackgroundColor: Colors.grey.shade50,
-                              backgroundColor: Colors.grey.shade50,
-                              tilePadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              childrenPadding:
-                                  const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: MonitoreoStyles.primaryColor,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                _isFilterExpanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                color: Colors.grey.shade600,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Contenido de filtros (expandible con scroll interno)
+                      if (_isFilterExpanded)
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                            child: Column(
                               children: [
-                                // Casa
+                                // Campo Lote/Código
+                                _buildFilterFormField(
+                                  label: 'Lote / Código',
+                                  hint: 'Buscar por lote o código',
+                                  controller: widget.searchController,
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Campo Plaga
                                 _buildFilterDropdown(
-                                  label: 'Casa',
-                                  hint: 'Seleccione casa',
-                                  options: filtrosCasas,
-                                  value: widget.selectedCasa,
+                                  label: 'Plaga',
+                                  hint: 'Seleccione plaga',
+                                  options: filtrosPlagas,
+                                  value: widget.selectedPlaga,
                                   onChanged: (value) {
-                                    widget.onCasaChanged(
+                                    widget.onPlagaChanged(
                                         value == 'Todas' ? null : value);
                                   },
                                 ),
                                 const SizedBox(height: 12),
 
-                                // Cantero
+                                // Campo Estado
                                 _buildFilterDropdown(
-                                  label: 'Cantero',
-                                  hint: 'Seleccione cantero',
-                                  options: filtrosCanteros,
-                                  value: widget.selectedCantero,
+                                  label: 'Estado',
+                                  hint: 'Seleccione estado',
+                                  options: ['Todos', 'Activo', 'Inactivo'],
+                                  value: widget.selectedEstado,
                                   onChanged: (value) {
-                                    widget.onCanteroChanged(
+                                    widget.onEstadoChanged(
                                         value == 'Todos' ? null : value);
                                   },
                                 ),
                                 const SizedBox(height: 12),
 
-                                // Variedad
-                                _buildFilterDropdown(
-                                  label: 'Variedad',
-                                  hint: 'Seleccione variedad',
-                                  options: filtrosVariedades,
-                                  value: widget.selectedVariedad,
-                                  onChanged: (value) {
-                                    widget.onVariedadChanged(
-                                        value == 'Todas' ? null : value);
-                                  },
+                                // Filtros adicionales en una tarjeta expandible
+                                Card(
+                                  margin: EdgeInsets.zero,
+                                  elevation: 0,
+                                  color: Colors.grey.shade50,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade200),
+                                  ),
+                                  child: ExpansionTile(
+                                    title: const Text('Filtros adicionales',
+                                        style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500)),
+                                    textColor: MonitoreoStyles.primaryColor,
+                                    iconColor: MonitoreoStyles.primaryColor,
+                                    collapsedBackgroundColor:
+                                        Colors.grey.shade50,
+                                    backgroundColor: Colors.grey.shade50,
+                                    tilePadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 4),
+                                    childrenPadding: const EdgeInsets.fromLTRB(
+                                        12, 0, 12, 12),
+                                    children: [
+                                      // Casa
+                                      _buildFilterDropdown(
+                                        label: 'Casa',
+                                        hint: 'Seleccione casa',
+                                        options: filtrosCasas,
+                                        value: widget.selectedCasa,
+                                        onChanged: (value) {
+                                          widget.onCasaChanged(
+                                              value == 'Todas' ? null : value);
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Cantero
+                                      _buildFilterDropdown(
+                                        label: 'Cantero',
+                                        hint: 'Seleccione cantero',
+                                        options: filtrosCanteros,
+                                        value: widget.selectedCantero,
+                                        onChanged: (value) {
+                                          widget.onCanteroChanged(
+                                              value == 'Todos' ? null : value);
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Variedad
+                                      _buildFilterDropdown(
+                                        label: 'Variedad',
+                                        hint: 'Seleccione variedad',
+                                        options: filtrosVariedades,
+                                        value: widget.selectedVariedad,
+                                        onChanged: (value) {
+                                          widget.onVariedadChanged(
+                                              value == 'Todas' ? null : value);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Selector de fechas
+                                InkWell(
+                                  onTap: () =>
+                                      widget.onSelectDateRange(context),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(4),
+                                      color: Colors.white,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.calendar_today,
+                                            size: 16,
+                                            color:
+                                                MonitoreoStyles.primaryColor),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            widget.fechaInicio != null &&
+                                                    widget.fechaFin != null
+                                                ? 'Del ${DateFormat('dd/MM/yyyy').format(widget.fechaInicio!)} al ${DateFormat('dd/MM/yyyy').format(widget.fechaFin!)}'
+                                                : 'Seleccione rango de fechas',
+                                            style: TextStyle(
+                                              color: widget.fechaInicio != null
+                                                  ? Colors.black
+                                                  : Colors.grey.shade600,
+                                              fontSize: 13,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (widget.fechaInicio != null)
+                                          InkWell(
+                                            onTap: widget.onFechaReset,
+                                            child: Icon(Icons.clear,
+                                                size: 16,
+                                                color: Colors.grey.shade600),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Botones de acción
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: widget.onSearch,
+                                        icon:
+                                            const Icon(Icons.search, size: 16),
+                                        label: const Text('Buscar'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              MonitoreoStyles.primaryColor,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => widget.onExportExcel(
+                                            'Monitoreos', false),
+                                        icon: const Icon(Icons.file_download,
+                                            size: 16),
+                                        label: const Text('Exportar'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              Colors.green.shade600,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
 
-                          // Selector de fechas
-                          InkWell(
-                            onTap: () => widget.onSelectDateRange(context),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(4),
-                                color: Colors.white,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.calendar_today,
-                                      size: 16,
-                                      color: MonitoreoStyles.primaryColor),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      widget.fechaInicio != null &&
-                                              widget.fechaFin != null
-                                          ? 'Del ${DateFormat('dd/MM/yyyy').format(widget.fechaInicio!)} al ${DateFormat('dd/MM/yyyy').format(widget.fechaFin!)}'
-                                          : 'Seleccione rango de fechas',
-                                      style: TextStyle(
-                                        color: widget.fechaInicio != null
-                                            ? Colors.black
-                                            : Colors.grey.shade600,
-                                        fontSize: 13,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (widget.fechaInicio != null)
-                                    InkWell(
-                                      onTap: widget.onFechaReset,
-                                      child: Icon(Icons.clear,
-                                          size: 16,
-                                          color: Colors.grey.shade600),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Botones de acción
-                          Row(
+              // RESULTADOS: Ocupan el espacio restante disponible
+              Expanded(
+                child: widget.isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : widget.errorMessage.isNotEmpty
+                        ? _buildErrorMessage()
+                        : Column(
                             children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: widget.onSearch,
-                                  icon: const Icon(Icons.search, size: 16),
-                                  label: const Text('Buscar'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        MonitoreoStyles.primaryColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 10),
+                              // Información de resultados
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                child: Text(
+                                  'Mostrando ${sortedData.length} de ${widget.totalItems} resultados',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+
+                              // Lista de monitoreos como tarjetas
                               Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () =>
-                                      widget.onExportExcel('Monitoreos', false),
-                                  icon:
-                                      const Icon(Icons.file_download, size: 16),
-                                  label: const Text('Exportar'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green.shade600,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 10),
-                                  ),
-                                ),
+                                child: sortedData.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          'No hay monitoreos para mostrar',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      )
+                                    : _buildMonitoreoCards(
+                                        sortedData, currentUserId),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    secondChild: const SizedBox.shrink(),
-                    crossFadeState: _isFilterExpanded
-                        ? CrossFadeState.showFirst
-                        : CrossFadeState.showSecond,
-                    duration: const Duration(milliseconds: 300),
-                  ),
-                ],
               ),
-            ),
+            ],
           ),
         ),
 
-        // CORRECCIÓN: Asignamos más espacio a la lista de resultados para asegurar que los controles de paginación no
-        // queden fuera de la pantalla
-        Flexible(
-          flex:
-              2, // El valor flex: 2 significa que tomará el doble de espacio que la sección de filtros
-          child: widget.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : widget.errorMessage.isNotEmpty
-                  ? _buildErrorMessage()
-                  : Column(
-                      children: [
-                        // Información de resultados
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'Mostrando ${sortedData.length} de ${widget.totalItems} resultados',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-
-                        // Lista de monitoreos como tarjetas
-                        Expanded(
-                          child: sortedData.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    'No hay monitoreos para mostrar',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                )
-                              : _buildMonitoreoCards(sortedData, currentUserId),
-                        ),
-
-                        // Controles de paginación compactos para móvil
-                        _buildMobilePaginationControls(),
-                      ],
-                    ),
-        ),
+        // PAGINACIÓN: Siempre fija en la parte inferior
+        _buildMobilePaginationControls(),
       ],
     );
   }

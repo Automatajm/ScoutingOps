@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import '../core/config/flavor_config.dart';
 import '../models/monitoreo_model.dart';
 import '../data/datasources/auth_service.dart';
@@ -487,29 +488,60 @@ class MonitoreoService extends ChangeNotifier {
         return filteredMonitoreos;
       }
 
-      // Construir parámetros de consulta
+      // ✅ CORRECCIÓN PRINCIPAL: Formato de fechas para el servidor
       final Map<String, dynamic> queryParams = {};
 
       if (lote != null && lote.isNotEmpty) queryParams['lote'] = lote;
       if (plaga != null && plaga != 'Todas') queryParams['plaga'] = plaga;
-      if (casa != null && casa != 'Todas')
-        queryParams['casa'] = casa; // Nuevo parámetro
+      if (casa != null && casa != 'Todas') queryParams['casa'] = casa;
       if (cantero != null && cantero != 'Todos')
-        queryParams['cantero'] = cantero; // Nuevo parámetro
+        queryParams['cantero'] = cantero;
       if (variedad != null && variedad != 'Todas')
-        queryParams['variedad'] = variedad; // Nuevo parámetro
+        queryParams['variedad'] = variedad;
       if (estatus != null) queryParams['estatus'] = estatus.toString();
-      if (fechaInicio != null)
-        queryParams['fechaInicio'] = fechaInicio.toIso8601String();
-      if (fechaFin != null)
-        queryParams['fechaFin'] = fechaFin.toIso8601String();
+
+      // ✅ FECHAS CORREGIDAS: Solo fecha sin hora y en formato YYYY-MM-DD
+      if (fechaInicio != null) {
+        // Crear fecha normalizada y formatearla como YYYY-MM-DD
+        final fechaNormalizada =
+            DateTime(fechaInicio.year, fechaInicio.month, fechaInicio.day);
+        queryParams['fechaInicio'] =
+            '${fechaNormalizada.year.toString().padLeft(4, '0')}-${fechaNormalizada.month.toString().padLeft(2, '0')}-${fechaNormalizada.day.toString().padLeft(2, '0')}';
+
+        debugPrint(
+            '🔍 FECHA INICIO formateada para API: ${queryParams['fechaInicio']}');
+      }
+
+      if (fechaFin != null) {
+        // Crear fecha normalizada y formatearla como YYYY-MM-DD
+        final fechaNormalizada =
+            DateTime(fechaFin.year, fechaFin.month, fechaFin.day);
+        queryParams['fechaFin'] =
+            '${fechaNormalizada.year.toString().padLeft(4, '0')}-${fechaNormalizada.month.toString().padLeft(2, '0')}-${fechaNormalizada.day.toString().padLeft(2, '0')}';
+
+        debugPrint(
+            '🔍 FECHA FIN formateada para API: ${queryParams['fechaFin']}');
+      }
+
+// ✅ NUEVO: Detectar si es filtro del mismo día
+      if (fechaInicio != null && fechaFin != null) {
+        final mismodia =
+            DateTime(fechaInicio.year, fechaInicio.month, fechaInicio.day)
+                .isAtSameMomentAs(
+                    DateTime(fechaFin.year, fechaFin.month, fechaFin.day));
+        debugPrint('🎯 FILTRO MISMO DÍA: $mismodia');
+        if (mismodia) {
+          debugPrint(
+              '🎯 BUSCANDO EXACTAMENTE EL DÍA: ${queryParams['fechaInicio']}');
+        }
+      }
 
       // Si el usuario es monitor (no admin), filtrar por su ID
       if (_authService.mustFilterByUser) {
         queryParams['usuarioId'] = _authService.getCurrentUserId().toString();
       }
 
-      debugPrint('Consultando monitoreos con parámetros: $queryParams');
+      debugPrint('🌐 CONSULTANDO API con parámetros: $queryParams');
 
       // Realizar petición
       final response = await _dio.get(
@@ -520,7 +552,19 @@ class MonitoreoService extends ChangeNotifier {
       if (response.statusCode == 200) {
         if (_isSuccessValue(response.data['success'])) {
           final List<dynamic> dataList = response.data['data'];
-          debugPrint('Monitoreos recibidos: ${dataList.length}');
+          debugPrint(
+              '📊 MONITOREOS RECIBIDOS del servidor: ${dataList.length}');
+
+          // ✅ DEBUG: Mostrar las primeras fechas recibidas del servidor
+          if (dataList.isNotEmpty) {
+            print('📅 FECHAS EN RESPUESTA DEL SERVIDOR:');
+            for (int i = 0; i < dataList.length && i < 5; i++) {
+              final item = dataList[i];
+              final fecha = item['pmmo_fecha'];
+              final loteCode = item['pmlt_codigo'];
+              print('  [$i] Lote: $loteCode, Fecha: $fecha');
+            }
+          }
 
           // Verificar el contenedor de cada monitoreo para depuración
           for (var item in dataList) {
@@ -540,6 +584,25 @@ class MonitoreoService extends ChangeNotifier {
                 .toList();
           }
 
+          // ✅ FILTRO DE FECHA: Solo aplica si NO estamos filtrando por lote/casa/cantero específicos
+          // (cuando navegas parciales, estás filtrando por casa/lote/cantero, así que no aplicamos filtro de fecha)
+          final bool isFilteringBySpecificData =
+              (casa != null && casa != 'Todas') ||
+                  (lote != null && lote.isNotEmpty) ||
+                  (cantero != null && cantero != 'Todos');
+
+          if (_authService.mustFilterByDate && !isFilteringBySpecificData) {
+            monitoreos = monitoreos
+                .where((monitoreo) =>
+                    _authService.isDateAllowed(monitoreo.pmmo_fecha))
+                .toList();
+            debugPrint(
+                '🗓️ FILTRO POR FECHA APLICADO: ${monitoreos.length} registros después del filtro');
+          } else if (isFilteringBySpecificData) {
+            debugPrint(
+                '🎯 FILTRO DE FECHA OMITIDO: Navegando parciales específicos');
+          }
+
           // MODIFICADO: Aplicar filtros adicionales en el lado del cliente si la API no lo maneja
           if (casa != null && casa != 'Todas') {
             monitoreos = monitoreos.where((m) => m.pmmo_casa == casa).toList();
@@ -556,6 +619,118 @@ class MonitoreoService extends ChangeNotifier {
                     m.pmmo_variedad == variedad ||
                     m.pmva_descripcion == variedad)
                 .toList();
+          }
+
+          // ✅ FILTRO ADICIONAL DE FECHAS en el cliente (por si el servidor no lo maneja correctamente)
+          if (fechaInicio != null || fechaFin != null) {
+            debugPrint('🔍 APLICANDO FILTROS DE FECHA EN EL CLIENTE...');
+            final int originalCount = monitoreos.length;
+
+            monitoreos = monitoreos.where((monitoreo) {
+              if (monitoreo.pmmo_fecha == null) return false;
+
+              // Normalizar fecha del monitoreo (solo año, mes, día)
+              final fechaMonitoreo = DateTime(
+                monitoreo.pmmo_fecha!.year,
+                monitoreo.pmmo_fecha!.month,
+                monitoreo.pmmo_fecha!.day,
+              );
+
+              bool cumpleFiltro = true;
+
+              // ✅ CORRECCIÓN PRINCIPAL: Verificar si es el mismo día
+              if (fechaInicio != null && fechaFin != null) {
+                final fechaInicioNormalizada = DateTime(
+                  fechaInicio.year,
+                  fechaInicio.month,
+                  fechaInicio.day,
+                );
+                final fechaFinNormalizada = DateTime(
+                  fechaFin.year,
+                  fechaFin.month,
+                  fechaFin.day,
+                );
+                // ✅ Si inicio y fin son el mismo día, buscar EXACTAMENTE ese día
+                if (fechaInicioNormalizada
+                    .isAtSameMomentAs(fechaFinNormalizada)) {
+                  cumpleFiltro =
+                      fechaMonitoreo.isAtSameMomentAs(fechaInicioNormalizada);
+                  debugPrint(
+                      '🎯 FILTRO MISMO DÍA: Buscando exactamente $fechaInicioNormalizada');
+                  debugPrint('   Fecha monitoreo: $fechaMonitoreo');
+                  debugPrint('   ¿Coincide?: $cumpleFiltro');
+                } else {
+                  // ✅ Si son fechas diferentes, usar rango normal
+                  cumpleFiltro =
+                      !fechaMonitoreo.isBefore(fechaInicioNormalizada) &&
+                          !fechaMonitoreo.isAfter(fechaFinNormalizada);
+                  debugPrint(
+                      '🗓️ FILTRO RANGO: $fechaInicioNormalizada a $fechaFinNormalizada');
+                  debugPrint('   Fecha monitoreo: $fechaMonitoreo');
+                  debugPrint('   ¿En rango?: $cumpleFiltro');
+                }
+              } else {
+                // ✅ Solo fecha inicio o solo fecha fin
+                if (fechaInicio != null) {
+                  final fechaInicioNormalizada = DateTime(
+                    fechaInicio.year,
+                    fechaInicio.month,
+                    fechaInicio.day,
+                  );
+                  cumpleFiltro =
+                      !fechaMonitoreo.isBefore(fechaInicioNormalizada);
+                }
+
+                if (fechaFin != null) {
+                  final fechaFinNormalizada = DateTime(
+                    fechaFin.year,
+                    fechaFin.month,
+                    fechaFin.day,
+                  );
+                  cumpleFiltro = cumpleFiltro &&
+                      !fechaMonitoreo.isAfter(fechaFinNormalizada);
+                }
+              }
+
+              return cumpleFiltro;
+            }).toList();
+
+            print('📊 FILTRO DE FECHAS APLICADO:');
+            print('  - Registros antes del filtro: $originalCount');
+            print('  - Registros después del filtro: ${monitoreos.length}');
+
+            if (monitoreos.isNotEmpty) {
+              print('  - Fechas resultantes:');
+              final fechasResultantes = monitoreos
+                  .where((m) => m.pmmo_fecha != null)
+                  .map((m) => DateFormat('dd/MM/yyyy').format(m.pmmo_fecha!))
+                  .toSet()
+                  .take(10);
+              for (final fecha in fechasResultantes) {
+                print('    * $fecha');
+              }
+            } else {
+              print('  ⚠️ NO SE ENCONTRARON RESULTADOS CON EL FILTRO DE FECHA');
+
+              // ✅ DEBUG ADICIONAL: Mostrar todas las fechas disponibles para comparar
+              print('  📅 FECHAS DISPONIBLES EN TODOS LOS DATOS:');
+              final todasLasFechas = dataList
+                  .where((item) => item['pmmo_fecha'] != null)
+                  .map((item) {
+                    try {
+                      final fecha = DateTime.parse(item['pmmo_fecha']);
+                      return DateFormat('dd/MM/yyyy').format(fecha);
+                    } catch (e) {
+                      return 'Fecha inválida: ${item['pmmo_fecha']}';
+                    }
+                  })
+                  .toSet()
+                  .take(20);
+
+              for (final fecha in todasLasFechas) {
+                print('    → $fecha');
+              }
+            }
           }
 
           // Si se solicita incluir datos offline, combinar con los datos del servidor
@@ -578,15 +753,18 @@ class MonitoreoService extends ChangeNotifier {
             monitoreos = [...monitoreos, ...filteredOfflineMonitoreos];
           }
 
+          print('✅ RESULTADO FINAL: ${monitoreos.length} monitoreos');
+
           notifyListeners(); // Notificar a los listeners cuando se actualiza la lista
           return monitoreos;
         } else {
-          debugPrint('Error en respuesta: ${response.data['message']}');
+          debugPrint(
+              '❌ ERROR EN RESPUESTA del servidor: ${response.data['message']}');
           throw Exception(
               response.data['message'] ?? 'Error al obtener monitoreos');
         }
       } else {
-        debugPrint('Error en código de estado: ${response.statusCode}');
+        debugPrint('❌ ERROR EN CÓDIGO DE ESTADO: ${response.statusCode}');
         throw Exception('Error en la solicitud: ${response.statusCode}');
       }
     } on DioException catch (e) {
@@ -595,17 +773,16 @@ class MonitoreoService extends ChangeNotifier {
       // Si hay un error de conexión, tratar de devolver datos offline
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout) {
-        debugPrint('Error de conexión, retornando datos offline');
+        debugPrint('🔄 ERROR DE CONEXIÓN, retornando datos offline');
         await _initializeOfflineData();
 
         // Aplicar los mismos filtros que arriba...
-
         return _offlineMonitoreos;
       }
 
       throw Exception('Error de conexión: ${e.message}');
     } catch (e) {
-      debugPrint('Error inesperado: $e');
+      debugPrint('❌ ERROR INESPERADO: $e');
       throw Exception('Error inesperado: $e');
     }
   }
@@ -1175,6 +1352,11 @@ class MonitoreoService extends ChangeNotifier {
                 .where((monitoreo) => monitoreo.pmmo_creadopor == userId)
                 .toList();
           }
+
+          // ✅ FILTRO DE FECHA: No aplica al consultar un lote específico
+          // (al navegar parciales estás consultando por lote específico)
+          debugPrint(
+              '🎯 Consultando lote específico: NO se aplica filtro de fecha');
 
           // Añadir monitoreos offline para este lote
           await _initializeOfflineData();

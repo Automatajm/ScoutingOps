@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const https = require('https');
-const http = require('http'); // NUEVO: Para HTTP fallback
+const http = require('http'); // Para HTTP fallback
 const fs = require('fs');
 const url = require('url'); // Para parsing seguro de URLs
 const rateLimit = require('express-rate-limit');
@@ -44,7 +44,7 @@ const isDevelopment = config.flavor === 'development';
 const isStaging = config.flavor === 'staging';
 const isProduction = config.flavor === 'production';
 
-console.log(`🎯 Server.js detectó FLAVOR: ${config.flavor}`);
+console.log(`🎯 Server.js detectó FLAVOR: ${config.flavor} para cliente drpestcontrol`);
 console.log(`🔍 Configuración de logs: development=${isDevelopment}, staging=${isStaging}, production=${isProduction}`);
 
 if (isProduction) {
@@ -76,37 +76,37 @@ if (isProduction) {
   
   console.info = (message, ...args) => {
     const cleanMessage = typeof message === 'string' ? sanitizeMessage(message) : message;
-    originalConsole.info(`ℹ️ [STAGING]`, cleanMessage, ...args);
+    originalConsole.info(`ℹ️ [STAGING-drpestcontrol]`, cleanMessage, ...args);
   };
   
   console.warn = (message, ...args) => {
-    originalConsole.warn(`⚠️ [STAGING]`, message, ...args);
+    originalConsole.warn(`⚠️ [STAGING-drpestcontrol]`, message, ...args);
   };
   
   console.error = (message, ...args) => {
-    originalConsole.error(`❌ [STAGING]`, message, ...args);
+    originalConsole.error(`❌ [STAGING-drpestcontrol]`, message, ...args);
   };
   
 } else {
-  // 🐛 DEVELOPMENT: Todo normal con prefijos
+  // 🐛 DEVELOPMENT: Todo normal con prefijos específicos de drpestcontrol
   console.log = (message, ...args) => {
-    originalConsole.log(`🐛 [DEV]`, message, ...args);
+    originalConsole.log(`🐛 [DEV-drpestcontrol]`, message, ...args);
   };
   
   console.info = (message, ...args) => {
-    originalConsole.info(`ℹ️ [DEV]`, message, ...args);
+    originalConsole.info(`ℹ️ [DEV-drpestcontrol]`, message, ...args);
   };
   
   console.warn = (message, ...args) => {
-    originalConsole.warn(`⚠️ [DEV]`, message, ...args);
+    originalConsole.warn(`⚠️ [DEV-drpestcontrol]`, message, ...args);
   };
   
   console.error = (message, ...args) => {
-    originalConsole.error(`❌ [DEV]`, message, ...args);
+    originalConsole.error(`❌ [DEV-drpestcontrol]`, message, ...args);
   };
   
   console.debug = (message, ...args) => {
-    originalConsole.debug(`🔍 [DEV]`, message, ...args);
+    originalConsole.debug(`🔍 [DEV-drpestcontrol]`, message, ...args);
   };
 }
 
@@ -117,12 +117,12 @@ const Logger = {
     if (isProduction) {
       originalConsole.error(`🚨 CRITICAL: ${ref}`);
     } else {
-      originalConsole.error(`🚨 CRITICAL: ${message} [${ref}]`, data);
+      originalConsole.error(`🚨 CRITICAL [drpestcontrol]: ${message} [${ref}]`, data);
     }
   },
   
   startup: (message) => {
-    originalConsole.log(`🚀 STARTUP: ${message}`);
+    originalConsole.log(`🚀 STARTUP [drpestcontrol]: ${message}`);
   },
   
   security: (message, data = null) => {
@@ -130,7 +130,7 @@ const Logger = {
     if (isProduction) {
       originalConsole.error(`🔒 SECURITY: ${ref}`);
     } else {
-      originalConsole.error(`🔒 SECURITY: ${message} [${ref}]`, data);
+      originalConsole.error(`🔒 SECURITY [drpestcontrol]: ${message} [${ref}]`, data);
     }
   },
 
@@ -138,7 +138,7 @@ const Logger = {
     if (isProduction) {
       originalConsole.info(`🔐 AUTH: [USER_ACTION]`);
     } else {
-      originalConsole.info(`🔐 AUTH: ${action}`, user ? { username: user, timestamp: new Date().toISOString() } : '');
+      originalConsole.info(`🔐 AUTH [drpestcontrol]: ${action}`, user ? { username: user, timestamp: new Date().toISOString() } : '');
     }
   },
 
@@ -146,7 +146,7 @@ const Logger = {
     if (isProduction) {
       // En producción no logear actividad de DB por seguridad
     } else {
-      originalConsole.info(`💾 DB: ${action}`, details);
+      originalConsole.info(`💾 DB [drpestcontrol]: ${action}`, details);
     }
   },
 
@@ -155,10 +155,10 @@ const Logger = {
       // En producción no logear cada API call por seguridad y performance
     } else if (isStaging) {
       // En staging solo método, sin detalles
-      originalConsole.info(`📡 [STAGING] API: ${method}`);
+      originalConsole.info(`📡 [STAGING-drpestcontrol] API: ${method}`);
     } else {
       // Solo en development: log completo
-      originalConsole.info(`📡 API: ${method} ${path}`, { origin, timestamp: new Date().toISOString() });
+      originalConsole.info(`📡 API [drpestcontrol]: ${method} ${path}`, { origin, timestamp: new Date().toISOString() });
     }
   },
 
@@ -172,7 +172,7 @@ const Logger = {
     if (isProduction) {
       originalConsole.warn(`🚫 RATE_LIMIT: ${limitType} [IP_BLOCKED]`);
     } else {
-      originalConsole.warn(`🚫 RATE_LIMIT: ${limitType}`, {
+      originalConsole.warn(`🚫 RATE_LIMIT [drpestcontrol]: ${limitType}`, {
         ip: clientIP,
         path: req.path,
         userAgent: req.get('User-Agent'),
@@ -189,13 +189,13 @@ app.set('pool', db.pool);
 app.set('db', db);
 
 // ==========================================
-// 🔒 RATE LIMITING CONFIGURATION (SINCRONIZADO CON FLAVOR)
+// 🔒 RATE LIMITING CONFIGURATION AJUSTADO PARA USO INDUSTRIAL
 // ==========================================
 
-// Rate Limiter General para todas las rutas
+// Rate Limiter General para todas las rutas - VALORES AMPLIADOS
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: config.rateLimit.maxRequests, // Usar config basado en FLAVOR
+  max: config.rateLimit.maxRequests, // ✅ USAR CONFIG AMPLIADO (1000/800/500)
   message: {
     success: false,
     message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo en 15 minutos.',
@@ -213,16 +213,16 @@ const generalLimiter = rateLimit({
     });
   },
   skip: (req) => {
-    // Permitir más libertad en desarrollo
-    return isDevelopment && (req.ip === '::1' || req.ip === '127.0.0.1');
+    // Permitir más libertad en desarrollo para drpestcontrol
+    return isDevelopment && (req.ip === '::1' || req.ip === '127.0.0.1' || req.hostname === 'drpestcontrol');
   }
 });
 
-// Rate Limiter ESTRICTO para autenticación
+// Rate Limiter MODERADO para autenticación - VALORES MÁS GENEROSOS
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: config.rateLimit.authMaxRequests, // Usar config basado en FLAVOR
-  skipSuccessfulRequests: true,
+  max: config.rateLimit.authMaxRequests, // ✅ USAR CONFIG AMPLIADO (25/35/50)
+  skipSuccessfulRequests: true, // ✅ CRÍTICO: No contar logins exitosos
   message: {
     success: false,
     message: 'Demasiados intentos de login. Cuenta bloqueada por 15 minutos.',
@@ -243,10 +243,10 @@ const authLimiter = rateLimit({
   }
 });
 
-// Rate Limiter para APIs de base de datos
+// Rate Limiter para APIs de base de datos - VALORES MUY GENEROSOS PARA USO INDUSTRIAL
 const dbApiLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutos
-  max: isProduction ? 50 : (isStaging ? 75 : 100),
+  max: isProduction ? 500 : (isStaging ? 300 : 200), // ✅ AMPLIADO SIGNIFICATIVAMENTE
   message: {
     success: false,
     message: 'Límite de API excedido. Intenta de nuevo en 10 minutos.',
@@ -262,10 +262,10 @@ const dbApiLimiter = rateLimit({
   }
 });
 
-// Rate Limiter para configuración y diagnóstico
+// Rate Limiter para configuración y diagnóstico - MÁS PERMISIVO
 const configLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutos
-  max: isProduction ? 20 : (isStaging ? 35 : 50),
+  max: isProduction ? 100 : (isStaging ? 75 : 50), // ✅ AMPLIADO PARA USO FRECUENTE
   message: {
     success: false,
     message: 'Acceso a configuración limitado. Intenta de nuevo en 5 minutos.',
@@ -281,26 +281,78 @@ const configLimiter = rateLimit({
   }
 });
 
-// ===== CORS CONFIGURATION BASADA EN FLAVOR =====
-// Usar configuración de CORS del config.js
-const allowedOriginsStatic = Array.isArray(config.cors.origins) ? config.cors.origins : [config.cors.origins];
+// ✅ NUEVO: Rate Limiter especial para usuarios autenticados - MUY PERMISIVO
+const authenticatedUserLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  max: 1000, // ✅ MUY ALTO para usuarios legítimos autenticados
+  message: {
+    success: false,
+    message: 'Límite excedido para usuario autenticado.',
+    error: 'AUTHENTICATED_RATE_LIMIT_EXCEEDED'
+  },
+  keyGenerator: (req) => {
+    // Usar username si está disponible, sino IP
+    return req.user?.pmus_usuario || req.ip;
+  },
+  skip: (req) => {
+    // No aplicar en desarrollo
+    return isDevelopment;
+  }
+});
 
-// 🔒 PATRONES REGEX OPTIMIZADOS (sin vulnerabilidades ReDoS)
+// ✅ MIDDLEWARE PARA DETECTAR USUARIOS AUTENTICADOS Y APLICAR LÍMITES MÁS GENEROSOS
+const smartRateLimiting = (req, res, next) => {
+  // Si el usuario está autenticado (tiene token válido), aplicar límites más generosos
+  const authHeader = req.headers.authorization;
+  const hasValidAuth = authHeader && authHeader.startsWith('Bearer ');
+  
+  if (hasValidAuth) {
+    // Aplicar rate limiting más permisivo para usuarios autenticados
+    authenticatedUserLimiter(req, res, next);
+  } else {
+    // Aplicar rate limiting estándar para usuarios no autenticados
+    next();
+  }
+};
+
+// ===== CORS CONFIGURATION OPTIMIZADA PARA DRPESTCONTROL =====
+// ✅ URLs estáticas específicas para drpestcontrol
+const allowedOriginsStatic = isDevelopment ? [
+  '*', // Solo en desarrollo
+  'https://drpestcontrol:8000',
+  'https://drpestcontrol:8080',
+  'http://drpestcontrol:8000',  // Fallback desarrollo
+  'http://drpestcontrol:8080',  // Fallback desarrollo
+  'https://localhost:8000',     // Desarrollo local
+  'http://localhost:8000'       // Desarrollo local
+] : (isStaging ? [
+  'https://drpestcontrol:8000',
+  'https://drpestcontrol:8080',
+  'https://staging.drpestcontrol.com',
+  'https://staging-api.drpestcontrol.com'
+] : [
+  // Solo HTTPS en producción
+  'https://drpestcontrol:8000',
+  'https://drpestcontrol:8080',
+  'https://app.drpestcontrol.com',
+  'https://api.drpestcontrol.com'
+]);
+
+// 🔒 PATRONES REGEX OPTIMIZADOS PARA DRPESTCONTROL (sin vulnerabilidades ReDoS)
 const allowedOriginPatterns = [
-  // Optimizado: Sin repeticiones anidadas que causen ReDoS
-  /^https:\/\/[a-zA-Z0-9-]+\.ngrok\.io$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.ngrok-free\.app$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.ngrok\.app$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.loca\.lt$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.github\.io$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.githubusercontent\.com$/,
-  // IPs privadas - optimizadas
-  /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}:8080$/,
-  /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:8080$/,
-  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:8080$/
+  // Específicos para drpestcontrol
+  /^https:\/\/drpestcontrol:\d+$/,
+  /^http:\/\/drpestcontrol:\d+$/, // Solo para desarrollo
+  // Subdominios seguros de drpestcontrol
+  /^https:\/\/[a-zA-Z0-9-]+\.drpestcontrol\.com$/,
+  // Solo en desarrollo: localhost
+  ...(isDevelopment ? [
+    /^https?:\/\/localhost:\d+$/,
+    /^https?:\/\/127\.0\.0\.1:\d+$/
+  ] : [])
 ];
 
-// 🛡️ FUNCIÓN SEGURA PARA VALIDAR ORÍGENES
+// 🛡️ FUNCIÓN SEGURA PARA VALIDAR ORÍGENES ESPECÍFICOS DE DRPESTCONTROL
 const isOriginAllowed = (requestOrigin) => {
   if (!requestOrigin || typeof requestOrigin !== 'string') {
     return false;
@@ -319,12 +371,12 @@ const isOriginAllowed = (requestOrigin) => {
     return true;
   }
   
-  // 1. Verificar lista estática (más rápido y seguro)
+  // 1. Verificar lista estática drpestcontrol (más rápido y seguro)
   if (allowedOriginsStatic.includes(requestOrigin) || allowedOriginsStatic.includes('*')) {
     return true;
   }
   
-  // 2. Verificar patrones regex (con timeout de seguridad)
+  // 2. Verificar patrones regex específicos de drpestcontrol (con timeout de seguridad)
   try {
     // Timeout para prevenir ReDoS
     const startTime = Date.now();
@@ -351,7 +403,7 @@ const isOriginAllowed = (requestOrigin) => {
   return false;
 };
 
-// 🔒 FUNCIÓN PARA VALIDAR DOMINIOS (previene URL injection)
+// 🔒 FUNCIÓN PARA VALIDAR DOMINIOS DRPESTCONTROL (previene URL injection)
 const isSecureDomain = (originUrl) => {
   try {
     const parsed = url.parse(originUrl);
@@ -364,22 +416,15 @@ const isSecureDomain = (originUrl) => {
       return true;
     }
     
-    // Lista exacta de hostnames permitidos
+    // ✅ Lista exacta de hostnames permitidos ESPECÍFICOS PARA DRPESTCONTROL
     const allowedHosts = [
-      'localhost',
-      '127.0.0.1',
-      '172.24.16.1',
-      '10.0.0.19',
-      '192.168.1.100',
-      '192.168.0.100',
-      '192.168.10.166',
-      '165.227.219.173',
-      'www.autoinfoplus.com',
-      'autoinfoplus.com',
-      'app.pestcontrol.com',
-      'staging.pestcontrol.com',
-      'api.pestcontrol.com',
-      'staging-api.pestcontrol.com'
+      'drpestcontrol',              // ✅ PRINCIPAL
+      'localhost',                  // Desarrollo
+      '127.0.0.1',                 // Desarrollo
+      'app.drpestcontrol.com',     // Producción
+      'api.drpestcontrol.com',     // API Producción
+      'staging.drpestcontrol.com', // Staging
+      'staging-api.drpestcontrol.com' // API Staging
     ];
     
     // Verificar hosts exactos
@@ -387,15 +432,10 @@ const isSecureDomain = (originUrl) => {
       return true;
     }
     
-    // Verificar subdominios seguros (sin .includes vulnerable)
+    // ✅ Verificar subdominios seguros SOLO DE DRPESTCONTROL
     const secureSubdomains = [
-      '.ngrok.io',
-      '.ngrok-free.app', 
-      '.ngrok.app',
-      '.loca.lt',
-      '.github.io',
-      '.githubusercontent.com',
-      '.pestcontrol.com'
+      '.drpestcontrol.com',  // ✅ Solo dominios del cliente
+      'localhost'            // Desarrollo
     ];
     
     // Verificación segura de subdominio (endsWith en lugar de includes)
@@ -420,7 +460,7 @@ app.use(cors({
         Logger.security('CORS: Origin not in allowedOrigins but allowed in development', origin);
         callback(null, true);
       } else {
-        Logger.security('CORS: Origin BLOCKED in production', origin);
+        Logger.security('CORS: Origin BLOCKED in production for drpestcontrol', origin);
         callback(new Error('No permitido por CORS'));
       }
     }
@@ -446,21 +486,24 @@ app.use(cors({
 // 🔒 Rate limiter general ANTES de otros middlewares
 app.use(generalLimiter);
 
-// ===== MIDDLEWARE CORS ULTRA SEGURO (SIN VULNERABILIDADES) =====
+// ✅ NUEVO: Aplicar smart rate limiting después del middleware de autenticación
+app.use(smartRateLimiting);
+
+// ===== MIDDLEWARE CORS ULTRA SEGURO PARA DRPESTCONTROL =====
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
   
-  // ✅ SOLUCIÓN CORS: Solo establecer headers para orígenes estáticamente validados
+  // ✅ SOLUCIÓN CORS: Solo establecer headers para orígenes drpestcontrol validados
   if (requestOrigin && isOriginAllowed(requestOrigin) && isSecureDomain(requestOrigin)) {
-    // 🔒 CRÍTICO: Solo usar orígenes de la whitelist estática
+    // 🔒 CRÍTICO: Solo usar orígenes de la whitelist estática drpestcontrol
     if (allowedOriginsStatic.includes(requestOrigin) || allowedOriginsStatic.includes('*') || isDevelopment) {
-      // ✅ ULTRA SEGURO: Origin estático de la whitelist
+      // ✅ ULTRA SEGURO: Origin estático de la whitelist drpestcontrol
       res.header('Access-Control-Allow-Origin', requestOrigin);
       res.header('Access-Control-Allow-Credentials', 'true');
     } else {
       // Para patrones regex: NO usar origin dinámico, usar un valor seguro
       if (!isProduction) {
-        Logger.security('CORS: Regex pattern matched but not setting dynamic origin', {
+        Logger.security('CORS: Regex pattern matched but not setting dynamic origin for drpestcontrol', {
           origin: requestOrigin
         });
       }
@@ -477,14 +520,14 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, ngrok-skip-browser-warning');
   res.header('Access-Control-Max-Age', '3600');
   
-  // Preflight seguro
+  // Preflight seguro para drpestcontrol
   if (req.method === 'OPTIONS') {
     if (requestOrigin && (allowedOriginsStatic.includes(requestOrigin) || isDevelopment)) {
       res.status(204).send();
     } else {
       res.status(403).json({
         success: false,
-        message: 'Origen no autorizado',
+        message: 'Origen no autorizado para drpestcontrol',
         error: 'CORS_FORBIDDEN'
       });
     }
@@ -494,13 +537,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔒 MIDDLEWARE DE PROTECCIÓN ADICIONAL
+// 🔒 MIDDLEWARE DE PROTECCIÓN ADICIONAL DRPESTCONTROL
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
   // Bloquear origin null completamente
   if (origin === 'null' && !isDevelopment) {
-    Logger.security('CORS: Origin null bloqueado', {
+    Logger.security('CORS: Origin null bloqueado para drpestcontrol', {
       ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
       method: req.method,
       path: req.path
@@ -509,7 +552,7 @@ app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return res.status(403).json({
         success: false,
-        message: 'Request bloqueado por políticas de seguridad',
+        message: 'Request bloqueado por políticas de seguridad drpestcontrol',
         error: 'NULL_ORIGIN_BLOCKED'
       });
     }
@@ -605,6 +648,8 @@ const plagasRoutes = require('./routes/plaga');
 const nivelesInfestacionRoutes = require('./routes/nivel_infestacion');
 const lotesRoutes = require('./routes/lotes');
 const monitoreoRoutes = require('./routes/monitoreo');
+const pmPlanRoutes = require('./routes/pm_plan'); // ✅ NUEVA IMPORTACIÓN
+const catalogosSyncRoutes = require('./routes/catalogos-sync');
 
 // Middleware para compartir configuración
 app.use((req, res, next) => {
@@ -621,8 +666,10 @@ app.use('/api/plagas', dbApiLimiter, plagasRoutes);
 app.use('/api/nivelesinfestacion', dbApiLimiter, nivelesInfestacionRoutes);
 app.use('/api/lotes', dbApiLimiter, lotesRoutes);
 app.use('/api/monitoreo', dbApiLimiter, monitoreoRoutes);
+app.use('/api/pm-plan', dbApiLimiter, pmPlanRoutes); // ✅ NUEVA RUTA
+app.use('/api/catalogos-sync', catalogosSyncRoutes);
 
-// ===== RUTA RAÍZ =====
+// ===== RUTA RAÍZ ESPECÍFICA PARA DRPESTCONTROL =====
 app.get('/', (req, res) => {
   const clientIP = req.headers['x-forwarded-for'] || 
                    req.headers['x-real-ip'] || 
@@ -639,12 +686,13 @@ app.get('/', (req, res) => {
       pending: db.pool ? db.pool.pendingCount : 0
     };
 
-    console.log(`Estado del pool - total: ${poolStatus.total}, inactivos: ${poolStatus.idle}, en espera: ${poolStatus.waiting}, operaciones pendientes: ${poolStatus.pending}`);
+    console.log(`Estado del pool drpestcontrol - total: ${poolStatus.total}, inactivos: ${poolStatus.idle}, en espera: ${poolStatus.waiting}, operaciones pendientes: ${poolStatus.pending}`);
   }
 
   res.json({ 
     success: true,
-    message: 'API Pest Control funcionando correctamente',
+    message: 'API Pest Control para drpestcontrol funcionando correctamente',
+    client: 'drpestcontrol',
     environment: config.environment,
     flavor: config.flavor,
     version: config.version,
@@ -662,7 +710,8 @@ app.get('/', (req, res) => {
       },
       corsInfo: {
         allowedOrigins: allowedOriginsStatic.length,
-        currentOrigin: req.headers.origin || 'No origin'
+        currentOrigin: req.headers.origin || 'No origin',
+        drpestcontrolSpecific: true
       },
       rateLimitInfo: req.rateLimit ? {
         remaining: req.rateLimit.remaining,
@@ -744,6 +793,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       success: true,
       user: userWithRoles,
       config: {
+        client: 'drpestcontrol',
         version: config.version,
         environment: config.environment,
         flavor: config.flavor,
@@ -765,11 +815,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
-// ===== RUTAS DE CONFIGURACIÓN CON RATE LIMITING =====
+// ===== RUTAS DE CONFIGURACIÓN CON RATE LIMITING ESPECÍFICAS PARA DRPESTCONTROL =====
 app.get('/api/config', configLimiter, (req, res) => {
   res.json({
     success: true,
-    message: 'Configuración del servidor',
+    message: 'Configuración del servidor drpestcontrol',
+    client: 'drpestcontrol',
     version: config.version,
     environment: config.environment,
     flavor: config.flavor,
@@ -782,7 +833,8 @@ app.get('/api/config', configLimiter, (req, res) => {
       systemInfo: config.system,
       corsInfo: {
         allowedOrigins: allowedOriginsStatic.length,
-        origins: allowedOriginsStatic
+        origins: allowedOriginsStatic,
+        drpestcontrolSpecific: true
       },
       rateLimit: {
         general: config.rateLimit.maxRequests,
@@ -796,7 +848,8 @@ app.get('/api/system/status', configLimiter, (req, res) => {
   res.json({
     success: true,
     status: 'online',
-    message: 'Sistema funcionando correctamente',
+    message: 'Sistema drpestcontrol funcionando correctamente',
+    client: 'drpestcontrol',
     serverTime: new Date().toISOString(),
     environment: config.environment,
     flavor: config.flavor,
@@ -824,7 +877,8 @@ app.get('/api/health', async (req, res) => {
     res.json({
       success: true,
       status: 'healthy',
-      message: 'Servidor y base de datos funcionando',
+      message: 'Servidor drpestcontrol y base de datos funcionando',
+      client: 'drpestcontrol',
       checks: {
         database: dbTest.rows.length > 0 ? 'connected' : 'disconnected',
         server: 'running',
@@ -847,13 +901,14 @@ app.get('/api/health', async (req, res) => {
     res.status(503).json({
       success: false,
       status: 'unhealthy',
+      client: 'drpestcontrol',
       error: isDevelopment ? err.message : 'Database connection failed',
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// ===== RUTA DE DIAGNÓSTICO CON RATE LIMITING =====
+// ===== RUTA DE DIAGNÓSTICO CON RATE LIMITING ESPECÍFICA PARA DRPESTCONTROL =====
 app.get('/api/diagnostico', configLimiter, async (req, res) => {
   try {
     const startTime = Date.now();
@@ -864,7 +919,8 @@ app.get('/api/diagnostico', configLimiter, async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Diagnóstico completo del sistema',
+      message: 'Diagnóstico completo del sistema drpestcontrol',
+      client: 'drpestcontrol',
       serverInfo: {
         status: 'operational',
         uptime: Math.floor(process.uptime()),
@@ -872,6 +928,7 @@ app.get('/api/diagnostico', configLimiter, async (req, res) => {
         environment: config.environment,
         flavor: config.flavor,
         version: config.version,
+        client: 'drpestcontrol',
         // En producción, información limitada
         ...(isProduction ? {} : {
           memoryUsage: process.memoryUsage(),
@@ -895,7 +952,8 @@ app.get('/api/diagnostico', configLimiter, async (req, res) => {
     Logger.critical('Error en diagnóstico', err.message);
     res.status(500).json({
       success: false,
-      message: 'Error en diagnóstico del sistema',
+      message: 'Error en diagnóstico del sistema drpestcontrol',
+      client: 'drpestcontrol',
       error: isDevelopment ? err.message : 'Error interno',
       timestamp: new Date().toISOString()
     });
@@ -924,6 +982,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({
     success: false,
     message: err.status === 429 ? 'Demasiadas solicitudes' : 'Error interno del servidor',
+    client: 'drpestcontrol',
     error: isDevelopment ? err.message : 'Contacta al administrador',
     timestamp: new Date().toISOString()
   });
@@ -934,7 +993,8 @@ app.use((req, res) => {
   Logger.security('Ruta no encontrada', { method: req.method, url: req.originalUrl });
   res.status(404).json({
     success: false,
-    message: `Ruta ${req.originalUrl} no encontrada`,
+    message: `Ruta ${req.originalUrl} no encontrada en servidor drpestcontrol`,
+    client: 'drpestcontrol',
     availableRoutes: [
       'GET /',
       'GET /api/config',
@@ -942,15 +1002,24 @@ app.use((req, res) => {
       'GET /api/health',
       'GET /api/diagnostico',
       'POST /api/auth/login',
+      'GET /api/usuarios/*',
+      'GET /api/roles/*',
       'GET /api/variedades/*',
+      'GET /api/unidadesCultivo/*',
+      'GET /api/plagas/*',
       'GET /api/nivelesinfestacion/*',
-      'GET /api/monitoreo/*'
+      'GET /api/lotes/*',
+      'GET /api/monitoreo/*',
+      'GET /api/pm-plan/*',              // ✅ NUEVA RUTA
+      'POST /api/pm-plan/*',             // ✅ NUEVA RUTA
+      'PUT /api/pm-plan/*',              // ✅ NUEVA RUTA
+      'DELETE /api/pm-plan/*'            // ✅ NUEVA RUTA
     ],
     timestamp: new Date().toISOString()
   });
 });
 
-// ===== CONFIGURACIÓN SSL CONDICIONAL =====
+// ===== CONFIGURACIÓN SSL CONDICIONAL ESPECÍFICA PARA DRPESTCONTROL =====
 let server;
 const sslKeyPath = path.join(__dirname, '..', 'key.pem');
 const sslCertPath = path.join(__dirname, '..', 'cert.pem');
@@ -960,7 +1029,7 @@ const sslKeyExists = fs.existsSync(sslKeyPath);
 const sslCertExists = fs.existsSync(sslCertPath);
 
 if ((sslKeyExists && sslCertExists) || config.ssl.enabled) {
-  // ✅ HTTPS con certificados
+  // ✅ HTTPS con certificados para drpestcontrol
   try {
     const sslOptions = {
       key: fs.readFileSync(sslKeyPath),
@@ -968,113 +1037,119 @@ if ((sslKeyExists && sslCertExists) || config.ssl.enabled) {
     };
     
     server = https.createServer(sslOptions, app).listen(config.port, '0.0.0.0', () => {
-      Logger.startup(`Servidor Pest Control iniciado exitosamente con HTTPS`);
-      Logger.startup(`🔒 SSL/TLS habilitado con certificados personalizados`);
+      Logger.startup(`Servidor Pest Control para drpestcontrol iniciado exitosamente con HTTPS`);
+      Logger.startup(`🔒 SSL/TLS habilitado con certificados personalizados para drpestcontrol`);
       Logger.startup(`📁 Certificados: ${sslKeyPath} y ${sslCertPath}`);
+      Logger.startup(`🏢 Cliente: drpestcontrol`);
       Logger.startup(`Host: ${config.host}`);
       Logger.startup(`Puerto: ${config.port}`);
       Logger.startup(`Entorno: ${config.environment}`);
       Logger.startup(`Flavor: ${config.flavor}`);
       Logger.startup(`Versión: ${config.version}`);
       
-      // 🔒 Log de configuración de seguridad
-      Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
-      Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min`);
-      Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min`);
-      Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : (isStaging ? '75' : '100')} requests per 10min`);
-      Logger.startup(`Config Rate Limit: ${isProduction ? '20' : (isStaging ? '35' : '50')} requests per 5min`);
-      Logger.startup(`CORS Security: ${config.cors.origins.includes('*') ? 'Wildcard (dev only)' : 'Whitelist'} with ${allowedOriginsStatic.length} origins`);
+      // 🔒 Log de configuración de seguridad específica para drpestcontrol
+      Logger.startup(`Rate Limiting: ${isProduction ? 'INDUSTRIAL' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
+      Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min (AMPLIADO para uso industrial)`);
+      Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min (AMPLIADO para uso industrial)`);
+      Logger.startup(`DB API Rate Limit: ${isProduction ? '500' : (isStaging ? '300' : '200')} requests per 10min (AMPLIADO para uso industrial)`);
+      Logger.startup(`Config Rate Limit: ${isProduction ? '100' : (isStaging ? '75' : '50')} requests per 5min (AMPLIADO para uso industrial)`);
+      Logger.startup(`Authenticated Users: 1000 requests per 5min (NUEVO - MUY PERMISIVO)`);
+      Logger.startup(`CORS Security: drpestcontrol-specific whitelist with ${allowedOriginsStatic.length} origins`);
       Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
+      Logger.startup(`CORS Allowed Origins: ${allowedOriginsStatic.join(', ')}`);
       
       if (!isProduction) {
-        Logger.startup(`URL Local HTTPS: https://localhost:${config.port}`);
-        Logger.startup(`URL Red HTTPS: https://192.168.10.166:${config.port}`);
-        Logger.startup(`Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
+        Logger.startup(`✅ URL drpestcontrol HTTPS: https://drpestcontrol:${config.port}`);
+        Logger.startup(`🔧 URL Local HTTPS: https://localhost:${config.port}`);
+        Logger.startup(`🌐 Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
       }
       
       // Probar conexión a la base de datos
       db.query('SELECT NOW() as connection_test')
         .then(result => {
-          Logger.startup('Conexión a la base de datos exitosa');
+          Logger.startup('Conexión a la base de datos exitosa para drpestcontrol');
           Logger.database('Tiempo de respuesta DB', new Date().toISOString());
         })
         .catch(err => {
-          Logger.critical('Error conectando a la base de datos', err.message);
+          Logger.critical('Error conectando a la base de datos drpestcontrol', err.message);
         });
     });
   } catch (sslError) {
-    Logger.critical('Error cargando certificados SSL', sslError.message);
+    Logger.critical('Error cargando certificados SSL para drpestcontrol', sslError.message);
     Logger.startup('⚠️ Fallback a HTTP debido a error en certificados SSL');
     initHttpServer();
   }
 } else {
   // ⚠️ HTTP sin certificados (desarrollo)
-  Logger.startup(`⚠️ Certificados SSL no encontrados - iniciando en HTTP`);
+  Logger.startup(`⚠️ Certificados SSL no encontrados para drpestcontrol - iniciando en HTTP`);
   Logger.startup(`📁 Buscando: ${sslKeyPath} y ${sslCertPath}`);
   Logger.startup(`📁 Key exists: ${sslKeyExists}, Cert exists: ${sslCertExists}`);
   initHttpServer();
 }
 
-// Función para inicializar servidor HTTP
+// Función para inicializar servidor HTTP para drpestcontrol
 function initHttpServer() {
   server = app.listen(config.port, '0.0.0.0', () => {
-    Logger.startup(`Servidor Pest Control iniciado exitosamente con HTTP`);
-    Logger.startup(`⚠️ ADVERTENCIA: Sin SSL/TLS - solo para desarrollo`);
+    Logger.startup(`Servidor Pest Control para drpestcontrol iniciado exitosamente con HTTP`);
+    Logger.startup(`⚠️ ADVERTENCIA: Sin SSL/TLS - solo para desarrollo drpestcontrol`);
+    Logger.startup(`🏢 Cliente: drpestcontrol`);
     Logger.startup(`Host: ${config.host}`);
     Logger.startup(`Puerto: ${config.port}`);
     Logger.startup(`Entorno: ${config.environment}`);
     Logger.startup(`Flavor: ${config.flavor}`);
     Logger.startup(`Versión: ${config.version}`);
     
-    // 🔒 Log de configuración de seguridad
-    Logger.startup(`Rate Limiting: ${isProduction ? 'STRICT' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
-    Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min`);
-    Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min`);
-    Logger.startup(`DB API Rate Limit: ${isProduction ? '50' : (isStaging ? '75' : '100')} requests per 10min`);
-    Logger.startup(`Config Rate Limit: ${isProduction ? '20' : (isStaging ? '35' : '50')} requests per 5min`);
-    Logger.startup(`CORS Security: ${config.cors.origins.includes('*') ? 'Wildcard (dev only)' : 'Whitelist'} with ${allowedOriginsStatic.length} origins`);
+    // 🔒 Log de configuración de seguridad específica para drpestcontrol
+    Logger.startup(`Rate Limiting: ${isProduction ? 'INDUSTRIAL' : (isStaging ? 'MODERATE' : 'PERMISSIVE')} mode`);
+    Logger.startup(`Auth Rate Limit: ${config.rateLimit.authMaxRequests} attempts per 15min (AMPLIADO para uso industrial)`);
+    Logger.startup(`General Rate Limit: ${config.rateLimit.maxRequests} requests per 15min (AMPLIADO para uso industrial)`);
+    Logger.startup(`DB API Rate Limit: ${isProduction ? '500' : (isStaging ? '300' : '200')} requests per 10min (AMPLIADO para uso industrial)`);
+    Logger.startup(`Config Rate Limit: ${isProduction ? '100' : (isStaging ? '75' : '50')} requests per 5min (AMPLIADO para uso industrial)`);
+    Logger.startup(`Authenticated Users: 1000 requests per 5min (NUEVO - MUY PERMISIVO)`);
+    Logger.startup(`CORS Security: drpestcontrol-specific whitelist with ${allowedOriginsStatic.length} origins`);
     Logger.startup(`CORS Protection: Anti-ReDoS regex patterns, Anti-null origin, Anti-URL injection`);
+    Logger.startup(`CORS Allowed Origins: ${allowedOriginsStatic.join(', ')}`);
     
     if (!isProduction) {
-      Logger.startup(`URL Local HTTP: http://localhost:${config.port}`);
-      Logger.startup(`URL Red HTTP: http://192.168.10.166:${config.port}`);
-      Logger.startup(`Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
+      Logger.startup(`✅ URL drpestcontrol HTTP: http://drpestcontrol:${config.port}`);
+      Logger.startup(`🔧 URL Local HTTP: http://localhost:${config.port}`);
+      Logger.startup(`🌐 Sistema: ${config.system ? config.system.platform + ' - ' + config.system.hostname : 'Sistema no detectado'}`);
     }
     
     // Probar conexión a la base de datos
     db.query('SELECT NOW() as connection_test')
       .then(result => {
-        Logger.startup('Conexión a la base de datos exitosa');
+        Logger.startup('Conexión a la base de datos exitosa para drpestcontrol');
         Logger.database('Tiempo de respuesta DB', new Date().toISOString());
       })
       .catch(err => {
-        Logger.critical('Error conectando a la base de datos', err.message);
+        Logger.critical('Error conectando a la base de datos drpestcontrol', err.message);
       });
   });
 }
 
 // ===== MANEJO GRACEFUL DE CIERRE =====
 const gracefulShutdown = async (signal) => {
-  Logger.startup(`Recibida señal ${signal}. Cerrando servidor...`);
+  Logger.startup(`Recibida señal ${signal}. Cerrando servidor drpestcontrol...`);
   
   server.close(async () => {
-    Logger.startup('Servidor cerrado');
+    Logger.startup('Servidor drpestcontrol cerrado');
     
     try {
       if (db.end) {
         await db.end();
-        Logger.startup('Pool de conexiones cerrado');
+        Logger.startup('Pool de conexiones drpestcontrol cerrado');
       }
-      Logger.startup('Aplicación cerrada correctamente');
+      Logger.startup('Aplicación drpestcontrol cerrada correctamente');
       process.exit(0);
     } catch (err) {
-      Logger.critical('Error al cerrar', err.message);
+      Logger.critical('Error al cerrar aplicación drpestcontrol', err.message);
       process.exit(1);
     }
   });
   
   setTimeout(() => {
-    Logger.critical('Forzando cierre...');
+    Logger.critical('Forzando cierre drpestcontrol...');
     process.exit(1);
   }, 10000);
 };
@@ -1083,11 +1158,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 process.on('unhandledRejection', (reason, promise) => {
-  Logger.critical('Unhandled Rejection', { reason, promise });
+  Logger.critical('Unhandled Rejection in drpestcontrol', { reason, promise });
 });
 
 process.on('uncaughtException', (error) => {
-  Logger.critical('Uncaught Exception', error.message);
+  Logger.critical('Uncaught Exception in drpestcontrol', error.message);
   process.exit(1);
 });
 
