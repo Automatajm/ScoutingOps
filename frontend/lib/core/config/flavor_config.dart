@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 enum Flavor { development, staging, production }
 
-// ===== LOGGER CENTRALIZADO INTEGRADO =====
+// ===== LOGGER CENTRALIZADO =====
 class Logger {
   static void debug(String message, [dynamic data]) {
     if (FlavorConfig.isDevelopment) {
@@ -86,42 +86,40 @@ class FlavorConfig {
     _currentFlavor = flavor;
     await _loadConfig();
 
-    Logger.info(
-        'Inicializando ApiConfig desde SharedPreferences para drpestcontrol');
+    Logger.info('Inicializando ApiConfig desde SharedPreferences');
     await _apiConfig.initialize();
 
     if (!_apiConfig.isConfigured || _apiConfig.baseUrl.isEmpty) {
       Logger.debug(
-          'No hay configuración manual, usando valores de $_currentFlavor para drpestcontrol');
+          'No hay configuración manual, usando valores de $_currentFlavor');
 
       await _apiConfig.updateFromServerResponse({
         'apiUrl': apiUrl,
         'baseUrl': apiUrl.replaceAll('/api', ''),
         'environment': environment,
-        'version': version
+        'version': version,
+        'client': client,
       });
     } else {
-      Logger.info(
-          'Configuración manual detectada para drpestcontrol, manteniéndola intacta',
-          {
-            'baseUrl': _apiConfig.baseUrl,
-            'apiUrl': _apiConfig.apiUrl,
-          });
+      Logger.info('Configuración manual detectada, manteniéndola intacta', {
+        'baseUrl': _apiConfig.baseUrl,
+        'apiUrl': _apiConfig.apiUrl,
+      });
 
       await _apiConfig.updateSystemInfo({
         'environment': environment,
         'version': version,
+        'client': client,
       });
     }
 
-    Logger.info(
-        'FlavorConfig inicializado completamente para drpestcontrol WEB', {
+    Logger.info('FlavorConfig inicializado completamente para WEB', {
       'apiConfigConfigured': _apiConfig.isConfigured,
       'baseUrl': _apiConfig.baseUrl,
       'apiUrl': _apiConfig.apiUrl,
       'platform': 'WEB',
       'flavor': _currentFlavor.toString(),
-      'client': 'drpestcontrol',
+      'client': client,
     });
   }
 
@@ -144,30 +142,25 @@ class FlavorConfig {
       Logger.info('✅ Archivo $envFile cargado exitosamente');
     } catch (e) {
       Logger.warning(
-          'No se pudo cargar $envFile, usando valores por defecto de drpestcontrol',
-          e);
+          'No se pudo cargar $envFile, usando valores por defecto', e);
     }
 
-    // ✅ CORREGIDO: Usar las variables correctas del .env
     _config = {
-      // API URLs - Priorizar PRODUCTION_API_URL para producción
-      'API_URL': _getApiUrlFromEnv(),
-      'BASE_URL': _getBaseUrlFromEnv(),
+      // Client info
+      'CLIENT': dotenv.env['CLIENT_NAME'] ?? 'pestcontrol',
+      'APP_NAME': dotenv.env['APP_NAME'] ?? 'PestControl',
+
+      // API URLs
+      'API_URL': dotenv.env['API_BASE_URL'] ??
+          _getDefaultApiUrl(_currentFlavor, dotenv.env['CLIENT_NAME']),
+      'BASE_URL': dotenv.env['BACKEND_URL'] ??
+          _getDefaultBaseUrl(_currentFlavor, dotenv.env['CLIENT_NAME']),
 
       // Environment info
       'ENVIRONMENT': dotenv.env['ENVIRONMENT'] ??
           dotenv.env['NODE_ENV'] ??
           _currentFlavor.toString(),
       'VERSION': dotenv.env['VERSION'] ?? '1.0.0',
-      'CLIENT': dotenv.env['CLIENT'] ?? 'drpestcontrol',
-      'APP_NAME': dotenv.env['APP_NAME'] ?? 'PestControl-drpestcontrol',
-
-      // Database config
-      'DB_HOST': dotenv.env['DB_HOST'] ?? 'postgres',
-      'DB_PORT': dotenv.env['DB_PORT'] ?? '5432',
-      'DB_NAME': dotenv.env['DB_NAME'] ?? 'pest_control',
-      'DB_USER': dotenv.env['DB_USER'] ?? 'pestuser',
-      'DB_PASSWORD': dotenv.env['DB_PASSWORD'] ?? '',
 
       // SSL/Security
       'SSL_ENABLED': dotenv.env['SSL_ENABLED'] == 'true',
@@ -181,66 +174,51 @@ class FlavorConfig {
       // Logging
       'LOG_LEVEL': dotenv.env['LOG_LEVEL'] ?? 'error',
       'DEBUG_MODE': dotenv.env['DEBUG_MODE'] == 'true',
+
+      // Features
+      'ENABLE_ANALYTICS': dotenv.env['ENABLE_ANALYTICS'] == 'true',
+      'ENABLE_CRASHLYTICS': dotenv.env['ENABLE_CRASHLYTICS'] == 'true',
     };
 
-    Logger.debug('FlavorConfig cargado para drpestcontrol WEB', {
+    Logger.debug('FlavorConfig cargado para WEB', {
+      'client': _config['CLIENT'],
       'apiUrl': _config['API_URL'],
       'baseUrl': _config['BASE_URL'],
       'environment': _config['ENVIRONMENT'],
       'platform': 'Web',
       'flavor': _currentFlavor.toString(),
-      'client': _config['CLIENT'],
       'sslEnabled': _config['SSL_ENABLED'],
       'debugMode': _config['DEBUG_MODE'],
     });
   }
 
-  // ✅ NUEVO: Obtener API URL según el entorno
-  static String _getApiUrlFromEnv() {
-    switch (_currentFlavor) {
+  // ✅ Genera URLs por defecto basadas en CLIENT_NAME y FLAVOR
+  static String _getDefaultBaseUrl(Flavor flavor, String? clientName) {
+    final client = clientName ?? 'pestcontrol';
+
+    switch (flavor) {
       case Flavor.production:
-        return dotenv.env['PRODUCTION_API_URL'] ??
-            dotenv.env['API_BASE_URL'] ??
-            'https://192.168.137.177:8000/api';
+        // En producción, usar IP específica o dominio
+        return 'https://192.168.137.177:8000';
       case Flavor.staging:
-        return dotenv.env['STAGING_API_URL'] ??
-            dotenv.env['API_BASE_URL'] ??
-            'https://drpestcontrol:8080/api';
+        return 'https://$client:8080';
       case Flavor.development:
       default:
-        return dotenv.env['API_BASE_URL'] ?? 'https://drpestcontrol:8000/api';
+        return 'https://$client:8000';
     }
   }
 
-  // ✅ NUEVO: Obtener Base URL según el entorno
-  static String _getBaseUrlFromEnv() {
-    switch (_currentFlavor) {
-      case Flavor.production:
-        return dotenv.env['BACKEND_URL'] ??
-            dotenv.env['PRODUCTION_API_URL']?.replaceAll('/api', '') ??
-            'https://192.168.137.177:8000';
-      case Flavor.staging:
-        return dotenv.env['BACKEND_URL'] ?? 'https://drpestcontrol:8080';
-      case Flavor.development:
-      default:
-        return dotenv.env['BACKEND_URL'] ?? 'https://drpestcontrol:8000';
-    }
+  static String _getDefaultApiUrl(Flavor flavor, String? clientName) {
+    return '${_getDefaultBaseUrl(flavor, clientName)}/api';
   }
 
-  // Getters actualizados
+  // Getters
+  static String get client => _config['CLIENT'];
+  static String get appName => _config['APP_NAME'];
   static String get apiUrl => _config['API_URL'];
   static String get baseUrl => _config['BASE_URL'];
   static String get environment => _config['ENVIRONMENT'];
   static String get version => _config['VERSION'];
-  static String get client => _config['CLIENT'];
-  static String get appName => _config['APP_NAME'];
-
-  // Database
-  static String get dbHost => _config['DB_HOST'];
-  static String get dbPort => _config['DB_PORT'];
-  static String get dbName => _config['DB_NAME'];
-  static String get dbUser => _config['DB_USER'];
-  static String get dbPassword => _config['DB_PASSWORD'];
 
   // Security
   static bool get sslEnabled => _config['SSL_ENABLED'];
@@ -257,6 +235,10 @@ class FlavorConfig {
   static String get logLevel => _config['LOG_LEVEL'];
   static bool get debugMode => _config['DEBUG_MODE'];
 
+  // Features
+  static bool get enableAnalytics => _config['ENABLE_ANALYTICS'];
+  static bool get enableCrashlytics => _config['ENABLE_CRASHLYTICS'];
+
   static Map<String, dynamic> get config => _config;
 
   static Flavor get currentFlavor => _currentFlavor;
@@ -272,7 +254,7 @@ class DatabaseConfig {
   static String get apiUrl => ApiConfig.staticApiUrl;
 }
 
-/// Clase ApiConfig específica para cliente drpestcontrol
+/// Clase ApiConfig multi-cliente
 class ApiConfig extends ChangeNotifier {
   static final ApiConfig _instance = ApiConfig._internal();
   factory ApiConfig() => _instance;
@@ -283,6 +265,7 @@ class ApiConfig extends ChangeNotifier {
   bool _isConfigured = false;
   String _environment = 'development';
   String _version = '1.0.0';
+  String _client = 'pestcontrol';
 
   List<String> _suggestedUrls = [];
   Map<String, dynamic> _serverInfo = {};
@@ -294,10 +277,11 @@ class ApiConfig extends ChangeNotifier {
   bool get isConfigured => _isConfigured;
   String get environment => _environment;
   String get version => _version;
+  String get client => _client;
   List<String> get suggestedUrls => _suggestedUrls;
   Map<String, dynamic> get serverInfo => _serverInfo;
 
-  // URLs específicas de servicios para drpestcontrol
+  // URLs específicas de servicios
   String get authUrl => '$_apiUrl/auth';
   String get usersUrl => '$_apiUrl/usuarios';
   String get rolesUrl => '$_apiUrl/roles';
@@ -318,95 +302,81 @@ class ApiConfig extends ChangeNotifier {
 
   Future<void> initialize() async {
     if (_isInitialized) {
-      Logger.warning(
-          'ApiConfig para drpestcontrol ya está inicializado, omitiendo...');
+      Logger.warning('ApiConfig ya está inicializado, omitiendo...');
       return;
     }
 
-    Logger.debug('Inicializando ApiConfig para drpestcontrol WEB...');
+    Logger.debug('Inicializando ApiConfig para WEB...');
 
+    _client = FlavorConfig.client;
     await _loadFromStorage();
-    await _generateSuggestedUrlsForDrpestcontrol();
+    await _generateSuggestedUrls();
 
     if (!isConfigured || _baseUrl.isEmpty) {
-      _setDefaultUrlsForDrpestcontrol();
-      Logger.debug(
-          'Usando URLs por defecto para drpestcontrol (no hay configuración guardada)');
+      _setDefaultUrls();
+      Logger.debug('Usando URLs por defecto (no hay configuración guardada)');
     }
 
     _isInitialized = true;
 
-    Logger.info('ApiConfig drpestcontrol WEB Inicializado', {
+    Logger.info('ApiConfig WEB Inicializado', {
       'baseUrl': _baseUrl,
       'apiUrl': _apiUrl,
       'isConfigured': isConfigured,
       'platform': 'WEB',
-      'client': 'drpestcontrol',
+      'client': _client,
       'flavor': FlavorConfig.currentFlavor.toString(),
       'suggestedUrlsCount': _suggestedUrls.length,
     });
   }
 
-  // ✅ CORREGIDO: URLs sugeridas basadas en el entorno actual
-  Future<void> _generateSuggestedUrlsForDrpestcontrol() async {
+  Future<void> _generateSuggestedUrls() async {
     _suggestedUrls.clear();
 
     switch (FlavorConfig.currentFlavor) {
       case Flavor.production:
         _suggestedUrls.addAll([
           'https://192.168.137.177:8000', // IP de producción
-          'https://drpestcontrol:8000', // Fallback
-          'https://drpestcontrol:8080', // Puerto alternativo
+          'https://$_client:8000', // Fallback
+          'https://$_client:8080', // Puerto alternativo
         ]);
         break;
       case Flavor.staging:
         _suggestedUrls.addAll([
-          'https://drpestcontrol:8080', // Staging principal
-          'https://drpestcontrol:8000', // Fallback
+          'https://$_client:8080', // Staging principal
+          'https://$_client:8000', // Fallback
         ]);
         break;
       case Flavor.development:
       default:
         _suggestedUrls.addAll([
-          'https://drpestcontrol:8000', // Development principal
-          'https://drpestcontrol:8080', // Alternativo
+          'https://$_client:8000', // Development principal
+          'https://$_client:8080', // Alternativo
         ]);
         break;
     }
 
-    Logger.debug('URLs sugeridas para drpestcontrol generadas', {
+    Logger.debug('URLs sugeridas generadas', {
       'count': _suggestedUrls.length,
       'urls': _suggestedUrls,
-      'client': 'drpestcontrol',
+      'client': _client,
       'flavor': FlavorConfig.currentFlavor.toString(),
     });
   }
 
-  // ✅ CORREGIDO: URLs por defecto basadas en el entorno
-  void _setDefaultUrlsForDrpestcontrol() {
-    switch (FlavorConfig.currentFlavor) {
-      case Flavor.production:
-        _baseUrl = 'https://192.168.137.177:8000';
-        break;
-      case Flavor.staging:
-        _baseUrl = 'https://drpestcontrol:8080';
-        break;
-      case Flavor.development:
-      default:
-        _baseUrl = 'https://drpestcontrol:8000';
-        break;
-    }
-
-    _apiUrl = '$_baseUrl/api';
+  void _setDefaultUrls() {
+    _baseUrl = FlavorConfig.baseUrl;
+    _apiUrl = FlavorConfig.apiUrl;
     _isConfigured = false;
     _environment = FlavorConfig.environment;
     _version = FlavorConfig.version;
+    _client = FlavorConfig.client;
 
-    Logger.debug('URLs por defecto drpestcontrol establecidas', {
+    Logger.debug('URLs por defecto establecidas', {
       'baseUrl': _baseUrl,
       'apiUrl': _apiUrl,
       'platform': 'WEB',
-      'client': 'drpestcontrol',
+      'client': _client,
       'flavor': FlavorConfig.currentFlavor.toString(),
       'isConfigured': _isConfigured,
     });
@@ -420,40 +390,42 @@ class ApiConfig extends ChangeNotifier {
       final storedEnvironment =
           prefs.getString('environment') ?? FlavorConfig.environment;
       final storedVersion = prefs.getString('version') ?? FlavorConfig.version;
+      final storedClient = prefs.getString('client') ?? FlavorConfig.client;
       final storedConfigured = prefs.getBool('isConfigured') ?? false;
 
-      Logger.debug('Cargando configuración drpestcontrol guardada', {
+      Logger.debug('Cargando configuración guardada', {
         'baseUrl': storedBaseUrl,
         'apiUrl': storedApiUrl,
         'isConfigured': storedConfigured,
-        'client': 'drpestcontrol',
+        'client': storedClient,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
-      if (_esUrlValidaParaDrpestcontrol(storedBaseUrl) &&
-          _esUrlValidaParaDrpestcontrol(storedApiUrl) &&
+      if (_esUrlValida(storedBaseUrl) &&
+          _esUrlValida(storedApiUrl) &&
           storedConfigured) {
         _baseUrl = storedBaseUrl!;
         _apiUrl = storedApiUrl!;
         _environment = storedEnvironment;
         _version = storedVersion;
+        _client = storedClient;
         _isConfigured = true;
 
-        Logger.info('Configuración drpestcontrol válida restaurada', {
+        Logger.info('Configuración válida restaurada', {
           'baseUrl': _baseUrl,
           'apiUrl': _apiUrl,
           'isConfigured': _isConfigured,
-          'client': 'drpestcontrol',
+          'client': _client,
           'flavor': FlavorConfig.currentFlavor.toString(),
         });
 
         notifyListeners();
       } else {
-        Logger.debug('No hay configuración drpestcontrol válida guardada');
+        Logger.debug('No hay configuración válida guardada');
         _isConfigured = false;
       }
     } catch (e) {
-      Logger.error('Error cargando configuración drpestcontrol', e);
+      Logger.error('Error cargando configuración', e);
       _isConfigured = false;
     }
   }
@@ -466,64 +438,45 @@ class ApiConfig extends ChangeNotifier {
       await prefs.setString('apiUrl', _apiUrl);
       await prefs.setString('environment', _environment);
       await prefs.setString('version', _version);
+      await prefs.setString('client', _client);
       await prefs.setBool('isConfigured', _isConfigured);
 
-      Logger.debug('Configuración drpestcontrol guardada', {
+      Logger.debug('Configuración guardada', {
         'baseUrl': _baseUrl,
         'apiUrl': _apiUrl,
         'isConfigured': _isConfigured,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
-
-      await Future.delayed(const Duration(milliseconds: 100));
-      final verification = await _verifyStorageSaveForDrpestcontrol();
-
-      Logger.debug('Verificación drpestcontrol', {'success': verification});
     } catch (e) {
-      Logger.error('Error guardando configuración drpestcontrol', e);
-    }
-  }
-
-  Future<bool> _verifyStorageSaveForDrpestcontrol() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedBase = prefs.getString('baseUrl');
-      final savedApi = prefs.getString('apiUrl');
-      final savedConfigured = prefs.getBool('isConfigured') ?? false;
-
-      return savedBase == _baseUrl &&
-          savedApi == _apiUrl &&
-          savedConfigured == _isConfigured;
-    } catch (e) {
-      return false;
+      Logger.error('Error guardando configuración', e);
     }
   }
 
   Future<void> updateBaseUrl(String newBaseUrl) async {
-    if (_esUrlValidaParaDrpestcontrol(newBaseUrl)) {
-      _baseUrl = _limpiarUrlParaDrpestcontrol(newBaseUrl);
+    if (_esUrlValida(newBaseUrl)) {
+      _baseUrl = _limpiarUrl(newBaseUrl);
       _apiUrl = '$_baseUrl/api';
       _isConfigured = true;
 
-      Logger.info('URL drpestcontrol configurada manualmente', {
+      Logger.info('URL configurada manualmente', {
         'newBaseUrl': _baseUrl,
         'newApiUrl': _apiUrl,
         'isConfigured': _isConfigured,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
       notifyListeners();
       await _saveToStorage();
     } else {
-      Logger.warning('URL base drpestcontrol inválida', newBaseUrl);
+      Logger.warning('URL base inválida', newBaseUrl);
     }
   }
 
   Future<void> updateApiUrl(String newApiUrl) async {
-    if (_esUrlValidaParaDrpestcontrol(newApiUrl)) {
-      _apiUrl = _limpiarUrlParaDrpestcontrol(newApiUrl);
+    if (_esUrlValida(newApiUrl)) {
+      _apiUrl = _limpiarUrl(newApiUrl);
 
       if (_apiUrl.endsWith('/api')) {
         _baseUrl = _apiUrl.substring(0, _apiUrl.length - 4);
@@ -534,25 +487,25 @@ class ApiConfig extends ChangeNotifier {
 
       _isConfigured = true;
 
-      Logger.info('API drpestcontrol configurada manualmente', {
+      Logger.info('API configurada manualmente', {
         'newApiUrl': _apiUrl,
         'derivedBaseUrl': _baseUrl,
         'isConfigured': _isConfigured,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
       notifyListeners();
       await _saveToStorage();
     } else {
-      Logger.warning('URL API drpestcontrol inválida', newApiUrl);
+      Logger.warning('URL API inválida', newApiUrl);
     }
   }
 
   Future<void> updateFromServerResponse(Map<String, dynamic>? config) async {
     if (config == null) return;
 
-    Logger.debug('Respuesta del servidor drpestcontrol', config);
+    Logger.debug('Respuesta del servidor', config);
 
     _serverInfo = Map<String, dynamic>.from(config);
 
@@ -560,11 +513,10 @@ class ApiConfig extends ChangeNotifier {
         _isConfigured && _baseUrl.isNotEmpty && _apiUrl.isNotEmpty;
 
     if (hasManualConfig) {
-      Logger.info(
-          'Configuración manual drpestcontrol detectada - Manteniendo URLs', {
+      Logger.info('Configuración manual detectada - Manteniendo URLs', {
         'baseUrlPreserved': _baseUrl,
         'apiUrlPreserved': _apiUrl,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
@@ -575,8 +527,7 @@ class ApiConfig extends ChangeNotifier {
     bool updated = false;
 
     if (config.containsKey('baseUrl')) {
-      String serverBaseUrl =
-          _limpiarUrlParaDrpestcontrol(config['baseUrl'].toString());
+      String serverBaseUrl = _limpiarUrl(config['baseUrl'].toString());
       if (_baseUrl != serverBaseUrl) {
         _baseUrl = serverBaseUrl;
         _apiUrl = '$_baseUrl/api';
@@ -585,8 +536,7 @@ class ApiConfig extends ChangeNotifier {
     }
 
     if (config.containsKey('apiUrl')) {
-      String serverApiUrl =
-          _limpiarUrlParaDrpestcontrol(config['apiUrl'].toString());
+      String serverApiUrl = _limpiarUrl(config['apiUrl'].toString());
       if (!serverApiUrl.endsWith('/api')) {
         serverApiUrl = '$serverApiUrl/api';
       }
@@ -606,11 +556,11 @@ class ApiConfig extends ChangeNotifier {
     if (updated) {
       _isConfigured = false;
 
-      Logger.info('URLs drpestcontrol actualizadas desde servidor', {
+      Logger.info('URLs actualizadas desde servidor', {
         'baseUrl': _baseUrl,
         'apiUrl': _apiUrl,
         'configuredManually': _isConfigured,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
@@ -638,11 +588,19 @@ class ApiConfig extends ChangeNotifier {
       }
     }
 
+    if (config.containsKey('client')) {
+      final newClient = config['client'].toString();
+      if (_client != newClient) {
+        _client = newClient;
+        updated = true;
+      }
+    }
+
     if (updated) {
-      Logger.debug('Info del sistema drpestcontrol actualizada', {
+      Logger.debug('Info del sistema actualizada', {
         'environment': _environment,
         'version': _version,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
@@ -651,20 +609,18 @@ class ApiConfig extends ChangeNotifier {
     }
   }
 
-  // ✅ ACTUALIZADO: Validación flexible para producción
-  bool _esUrlValidaParaDrpestcontrol(String? url) {
+  bool _esUrlValida(String? url) {
     if (url == null || url.isEmpty) return false;
 
     try {
-      // Regex más flexible para incluir IPs de producción
+      // Regex flexible para URLs válidas
       final validUrlRegex = RegExp(
         r'^(https?://)?' // Protocolo opcional
         r'(' // Inicio de grupo de hosts válidos
-        r'drpestcontrol' // Nombre del servidor
-        r'|192\.168\.137\.177' // IP de producción específica
-        r'|localhost' // Desarrollo local
-        r'|127\.0\.0\.1' // Desarrollo local IP
-        r')' // Fin de grupo de hosts válidos
+        r'[a-zA-Z0-9\-]+' // Cualquier hostname válido
+        r'|' // O
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' // IPv4
+        r')' // Fin de grupo
         r'(:\d+)?' // Puerto opcional
         r'(/.*)?$', // Path opcional
         caseSensitive: false,
@@ -672,21 +628,21 @@ class ApiConfig extends ChangeNotifier {
 
       final isValid = validUrlRegex.hasMatch(url.toLowerCase());
 
-      Logger.debug('Validando URL para drpestcontrol', {
+      Logger.debug('Validando URL', {
         'url': url,
         'valid': isValid,
-        'client': 'drpestcontrol',
+        'client': _client,
         'flavor': FlavorConfig.currentFlavor.toString(),
       });
 
       return isValid;
     } catch (e) {
-      Logger.error('Error validando URL drpestcontrol', e);
+      Logger.error('Error validando URL', e);
       return false;
     }
   }
 
-  String _limpiarUrlParaDrpestcontrol(String url) {
+  String _limpiarUrl(String url) {
     url = url.trim();
 
     if (url.endsWith('/api')) {
@@ -699,13 +655,6 @@ class ApiConfig extends ChangeNotifier {
       url = 'https://$url';
     }
 
-    Logger.debug('URL drpestcontrol limpiada', {
-      'original': url,
-      'cleaned': url,
-      'client': 'drpestcontrol',
-      'flavor': FlavorConfig.currentFlavor.toString(),
-    });
-
     return url;
   }
 
@@ -717,26 +666,24 @@ class ApiConfig extends ChangeNotifier {
   }
 
   Future<void> reset() async {
-    Logger.debug(
-        'Reiniciando configuración drpestcontrol a valores por defecto');
+    Logger.debug('Reiniciando configuración a valores por defecto');
 
-    _setDefaultUrlsForDrpestcontrol();
+    _setDefaultUrls();
     _serverInfo.clear();
-    await _generateSuggestedUrlsForDrpestcontrol();
+    await _generateSuggestedUrls();
     await _saveToStorage();
     notifyListeners();
 
-    Logger.info('Configuración drpestcontrol reseteada', {
+    Logger.info('Configuración reseteada', {
       'baseUrl': _baseUrl,
       'apiUrl': _apiUrl,
-      'client': 'drpestcontrol',
+      'client': _client,
       'flavor': FlavorConfig.currentFlavor.toString(),
     });
   }
 
   bool isLocalUrl() {
-    return _baseUrl.contains('drpestcontrol') ||
-        _baseUrl.contains('localhost') ||
+    return _baseUrl.contains('localhost') ||
         _baseUrl.contains('127.0.0.1') ||
         RegExp(r'192\.168\.\d+\.\d+').hasMatch(_baseUrl) ||
         RegExp(r'10\.\d+\.\d+\.\d+').hasMatch(_baseUrl) ||
@@ -747,27 +694,16 @@ class ApiConfig extends ChangeNotifier {
     return _baseUrl.startsWith('https://');
   }
 
-  bool isNgrokUrl() {
-    return _baseUrl.contains('ngrok');
-  }
-
   bool isExternalUrl() {
     return !isLocalUrl();
   }
 
-  bool isDrpestcontrolUrl() {
-    return _baseUrl.contains('drpestcontrol') ||
-        _baseUrl.contains('192.168.137.177');
-  }
-
   String getConnectionType() {
-    if (isDrpestcontrolUrl()) return 'drpestcontrol';
-    if (isNgrokUrl()) return 'ngrok';
+    if (_baseUrl.contains('ngrok')) return 'ngrok';
     if (_baseUrl.contains('loca.lt')) return 'localtunnel';
     if (_baseUrl.contains('herokuapp.com')) return 'heroku';
     if (_baseUrl.contains('vercel.app')) return 'vercel';
     if (_baseUrl.contains('netlify.app')) return 'netlify';
-    if (_baseUrl.contains('github.')) return 'github';
     if (isLocalUrl()) return 'local';
     return 'external';
   }
@@ -779,13 +715,11 @@ class ApiConfig extends ChangeNotifier {
       'isConfigured': _isConfigured,
       'environment': _environment,
       'version': _version,
+      'client': _client,
       'platform': 'WEB',
-      'client': 'drpestcontrol',
       'flavor': FlavorConfig.currentFlavor.toString(),
       'isLocalUrl': isLocalUrl(),
       'isHttpsUrl': isHttpsUrl(),
-      'isNgrokUrl': isNgrokUrl(),
-      'isDrpestcontrolUrl': isDrpestcontrolUrl(),
       'connectionType': getConnectionType(),
       'suggestedUrls': _suggestedUrls,
       'serverInfo': _serverInfo,
@@ -808,10 +742,9 @@ class ApiConfig extends ChangeNotifier {
       'isConfigured': _isConfigured,
       'connectionType': getConnectionType(),
       'platform': 'WEB',
-      'client': 'drpestcontrol',
+      'client': _client,
       'flavor': FlavorConfig.currentFlavor.toString(),
       'isHttps': isHttpsUrl(),
-      'isDrpestcontrol': isDrpestcontrolUrl(),
     };
   }
 }

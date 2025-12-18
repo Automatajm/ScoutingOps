@@ -5,8 +5,8 @@ import '../utils/constants.dart';
 import '../utils/nivel_calculator.dart';
 import '../widgets/form_fields.dart';
 import '../widgets/responsive_card.dart';
-import '../widgets/cantero_wizard_bar.dart'; // ✅ NUEVO: Import del wizard
-import '../widgets/searchable_variedad_selector.dart'; // ✅ NUEVO: Selector de variedad con búsqueda
+import '../widgets/cantero_wizard_bar.dart';
+import '../widgets/searchable_variedad_selector.dart';
 
 class RegistroTab extends StatefulWidget {
   final Monitoreo? currentMonitoreo;
@@ -28,7 +28,6 @@ class RegistroTab extends StatefulWidget {
   final TextEditingController muestra2Controller;
   final TextEditingController muestra3Controller;
 
-  // ✅ NUEVO: Controlador para rango de canteros
   final TextEditingController? canterosRangeController;
 
   // Valores seleccionados
@@ -65,7 +64,6 @@ class RegistroTab extends StatefulWidget {
   final Function(String) onMuestra2Changed;
   final Function(String) onMuestra3Changed;
 
-  // ✅ NUEVO: Callback para cambio de rango de canteros
   final Function(String)? onCanterosRangeChanged;
 
   // Propiedad para modo offline
@@ -84,7 +82,7 @@ class RegistroTab extends StatefulWidget {
   // Set de variedades ya usadas (solo modo manual)
   final Set<String> variedadesUsadas;
 
-  // ✅ NUEVO: Propiedades del wizard de canteros
+  // Propiedades del wizard de canteros
   final bool isWizardActive;
   final bool isWizardRangeLocked;
   final int wizardCanteroActual;
@@ -108,7 +106,7 @@ class RegistroTab extends StatefulWidget {
     required this.muestra1Controller,
     required this.muestra2Controller,
     required this.muestra3Controller,
-    this.canterosRangeController, // ✅ NUEVO
+    this.canterosRangeController,
     required this.selectedCasa,
     required this.selectedVariedad,
     required this.selectedPlaga,
@@ -135,14 +133,13 @@ class RegistroTab extends StatefulWidget {
     required this.onMuestra1Changed,
     required this.onMuestra2Changed,
     required this.onMuestra3Changed,
-    this.onCanterosRangeChanged, // ✅ NUEVO
+    this.onCanterosRangeChanged,
     this.isOfflineMode = false,
     this.isSmallScreen = false,
     this.isInPartialSaveMode = false,
     this.isEditingExistingPartial = false,
     this.plagasRegistradas = const {},
     this.variedadesUsadas = const {},
-    // ✅ NUEVO: Valores por defecto del wizard
     this.isWizardActive = false,
     this.isWizardRangeLocked = false,
     this.wizardCanteroActual = 0,
@@ -162,7 +159,7 @@ class _RegistroTabState extends State<RegistroTab> {
   // Variable para error de cantero
   String? _canteroError;
 
-  // ✅ NUEVO: Error para rango de canteros
+  // Error para rango de canteros
   String? _canterosRangeError;
 
   @override
@@ -179,7 +176,7 @@ class _RegistroTabState extends State<RegistroTab> {
     );
   }
 
-  // ✅ NUEVO: Widget para el campo de rango de canteros
+  // ✅ NUEVO: Widget para el campo de rango de canteros (SIN barra de progreso duplicada)
   Widget _buildCanterosRangeField() {
     if (widget.canterosRangeController == null) {
       return const SizedBox.shrink();
@@ -243,7 +240,7 @@ class _RegistroTabState extends State<RegistroTab> {
               flex: 1,
               child: TextFormField(
                 controller: widget.canteroController,
-                enabled: false, // ✅ SIEMPRE readonly cuando hay wizard
+                enabled: false,
                 decoration: InputDecoration(
                   labelText: 'Cantero actual',
                   prefixIcon: Icon(
@@ -268,96 +265,15 @@ class _RegistroTabState extends State<RegistroTab> {
           ],
         ),
 
-        // Indicador de progreso del wizard
-        if (widget.isWizardActive && widget.wizardTotalCanteros > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _buildWizardProgressIndicator(),
-          ),
+        // ❌ BARRA DE PROGRESO DUPLICADA ELIMINADA
+        // La barra de progreso ya está en el CanteroWizardBar del header
       ],
     );
   }
 
-  // ✅ NUEVO: Indicador de progreso del wizard
-  Widget _buildWizardProgressIndicator() {
-    final parser =
-        CanteroRangeParser.parse(widget.canterosRangeController?.text ?? '');
-    if (!parser.isValid || parser.isSingleCantero) {
-      return const SizedBox.shrink();
-    }
-
-    final posicion = widget.wizardCanteroActual - parser.inicio + 1;
-    final progreso = posicion / parser.total;
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.indigo.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.indigo.shade200),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.route, size: 16, color: Colors.indigo.shade700),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Wizard activo',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.indigo.shade700,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.shade700,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$posicion de ${parser.total}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progreso,
-              backgroundColor: Colors.indigo.shade100,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo.shade600),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Canteros: ${parser.inicio} → ${parser.fin}',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.indigo.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ✅ NUEVO: Validar formato del rango
+  // Validar formato del rango
   String? _validateCanterosRange(String value) {
-    if (value.isEmpty) return null; // Permitir vacío
+    if (value.isEmpty) return null;
 
     final parts = value.split('-');
     if (parts.length != 2) {
@@ -420,37 +336,7 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Indicador de modo offline
-                    if (widget.isOfflineMode)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.wifi_off,
-                              color: Colors.red.shade800,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Modo sin conexión: Los cambios se guardarán localmente y se sincronizarán cuando vuelva la conexión.',
-                                style: TextStyle(
-                                  color: Colors.red.shade800,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    // ❌ BANNER "MODO SIN CONEXIÓN" ELIMINADO
 
                     // Mensaje de error si existe
                     if (widget.errorMessage.isNotEmpty)
@@ -487,7 +373,7 @@ class _RegistroTabState extends State<RegistroTab> {
                             ],
                             onPressed: widget.isWizardRangeLocked ||
                                     widget.isInPartialSaveMode
-                                ? null // ✅ Deshabilitar si wizard está bloqueado
+                                ? null
                                 : (index) {
                                     widget.onToggleEntryMode();
                                   },
@@ -503,7 +389,6 @@ class _RegistroTabState extends State<RegistroTab> {
                               ),
                             ],
                           ),
-                          // ✅ NUEVO: Indicador de modo bloqueado
                           if (widget.isWizardRangeLocked ||
                               widget.isInPartialSaveMode)
                             Padding(
@@ -580,13 +465,13 @@ class _RegistroTabState extends State<RegistroTab> {
 
                           if (!widget.isManualEntry) const SizedBox(height: 16),
 
-                          // ✅ NUEVO: Campo de rango de canteros (si está disponible)
+                          // Campo de rango de canteros (si está disponible)
                           if (showWizardFields) ...[
                             _buildCanterosRangeField(),
                             const SizedBox(height: 16),
                           ],
 
-                          // Campos para entrada (sin el campo individual de cantero si hay wizard)
+                          // Campos para entrada
                           Row(
                             children: [
                               Expanded(
@@ -605,7 +490,6 @@ class _RegistroTabState extends State<RegistroTab> {
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              // ✅ MODIFICADO: Solo mostrar campo cantero individual si NO hay wizard
                               if (!showWizardFields)
                                 Expanded(
                                   child: TextFormField(
@@ -727,7 +611,7 @@ class _RegistroTabState extends State<RegistroTab> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Indicadores de plagas registradas (código existente)
+                          // Indicadores de plagas registradas
                           if (widget.isManualEntry &&
                               widget.isInPartialSaveMode &&
                               widget.plagasRegistradas.isNotEmpty)
@@ -792,7 +676,7 @@ class _RegistroTabState extends State<RegistroTab> {
                               ),
                             ),
 
-                          // Indicadores modo automático (código existente)
+                          // Indicadores modo automático
                           if (!widget.isManualEntry &&
                               widget.isInPartialSaveMode &&
                               widget.plagasRegistradas.isNotEmpty)
@@ -877,7 +761,7 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Datos de muestras y niveles (código existente sin cambios)
+                    // Datos de muestras y niveles
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -928,7 +812,7 @@ class _RegistroTabState extends State<RegistroTab> {
                             ),
                           ),
 
-                          // Muestras (código existente)
+                          // Muestras
                           Row(
                             children: [
                               Expanded(
@@ -1027,7 +911,7 @@ class _RegistroTabState extends State<RegistroTab> {
                             ],
                           ),
 
-                          // Niveles calculados (código existente)
+                          // Niveles calculados
                           if (widget.muestra1Controller.text.isNotEmpty ||
                               widget.muestra2Controller.text.isNotEmpty ||
                               widget.muestra3Controller.text.isNotEmpty)
@@ -1128,7 +1012,7 @@ class _RegistroTabState extends State<RegistroTab> {
     );
   }
 
-  // Layout para pantallas móviles - Similar al desktop pero adaptado
+  // Layout para pantallas móviles
   Widget _buildMobileLayout(List<String> nivelesMuestra) {
     final showWizardFields = widget.canterosRangeController != null &&
         (widget.codigoLoteController.text.isNotEmpty || widget.isManualEntry);
@@ -1232,34 +1116,7 @@ class _RegistroTabState extends State<RegistroTab> {
                     ),
                   ),
 
-                // Indicador offline
-                if (widget.isOfflineMode)
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(bottom: 8, top: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off,
-                            color: Colors.red.shade800, size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Modo sin conexión',
-                            style: TextStyle(
-                              color: Colors.red.shade800,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                // ❌ BANNER OFFLINE ELIMINADO EN MOBILE LAYOUT
 
                 // Sección de información del lote (colapsable)
                 CollapsibleCard(
@@ -1305,7 +1162,7 @@ class _RegistroTabState extends State<RegistroTab> {
                           ],
                         ),
 
-                      // ✅ NUEVO: Campo de rango de canteros en móvil
+                      // Campo de rango de canteros en móvil
                       if (showWizardFields) ...[
                         _buildCanterosRangeField(),
                         const SizedBox(height: 12),
@@ -1425,7 +1282,7 @@ class _RegistroTabState extends State<RegistroTab> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Indicadores de plagas registradas (código existente simplificado)
+                      // Indicadores de plagas registradas
                       if (widget.isInPartialSaveMode &&
                           widget.plagasRegistradas.isNotEmpty)
                         Container(

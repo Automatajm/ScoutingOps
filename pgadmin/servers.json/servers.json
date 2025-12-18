@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Pest Control DB",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "pest_control",
+      "Username": "pestuser",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}

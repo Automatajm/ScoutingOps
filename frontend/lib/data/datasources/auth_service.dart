@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/flavor_config.dart';
 import '../models/user_model.dart';
 import '../../presentation/pages/auth/login_screen.dart';
@@ -18,7 +20,9 @@ class AuthService extends ChangeNotifier {
 
   BuildContext? _currentContext;
 
-  // Configuración de tiempos de inactividad
+  // ✅ NUEVO: Flag para recordar logout explícito
+  bool _explicitLogout = false;
+
   static const inactivityTimeout = Duration(minutes: 30);
   static const warningBeforeTimeout = Duration(seconds: 30);
   static const loginScreenTimeout = Duration(minutes: 30);
@@ -34,39 +38,22 @@ class AuthService extends ChangeNotifier {
   bool get isMonitoreador => _currentUser?.isMonitoreador ?? false;
   bool get isAdmin => _currentUser?.isAdmin ?? false;
 
-  /// Lógica para filtrado por usuario que considera si es admin en móvil
   bool get mustFilterByUser {
-    // Si no es monitoreador, no necesita filtro
     if (!isMonitoreador) return false;
-
-    // Si es admin, verificar si está en móvil
     if (isAdmin) {
-      // Si es admin en móvil, NO filtrar (puede ver todos los registros)
-      if (_isMobileDevice()) {
-        return false;
-      }
-      // Si es admin en desktop, tampoco filtrar
+      if (_isMobileDevice()) return false;
       return false;
     }
-
-    // Solo los monitoreadores no-admin necesitan filtro
     return true;
   }
 
-  /// Indica si el usuario debe ver solo datos de ayer y hoy
-  bool get mustFilterByDate {
-    // Solo los monitoreadores tienen filtro de fecha
-    return isMonitoreador;
-  }
+  bool get mustFilterByDate => isMonitoreador;
 
-  /// Verificar si una fecha está permitida para el usuario actual
   bool isDateAllowed(DateTime? date) {
     if (!mustFilterByDate) return true;
     if (date == null) return false;
 
-    // Convertir fecha UTC a hora local antes de comparar
     final localDate = date.toLocal();
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -77,10 +64,9 @@ class AuthService extends ChangeNotifier {
 
     return dateOnly.isAtSameMomentAs(yesterday) ||
         dateOnly.isAtSameMomentAs(today) ||
-        dateOnly.isAfter(yesterday); // Incluir hoy y hacia adelante
+        dateOnly.isAfter(yesterday);
   }
 
-  /// Obtener descripción del filtro activo (para mostrar en UI)
   String getFilterDescription() {
     if (isAdmin) {
       return _isMobileDevice()
@@ -93,42 +79,51 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Detectar si es dispositivo móvil
   bool _isMobileDevice() {
     if (_currentContext == null) return false;
     final screenWidth = MediaQuery.of(_currentContext!).size.width;
     return screenWidth < 1024;
   }
 
-  /// Actualizar contexto para detección de dispositivo
   void updateContext(BuildContext context) {
     _currentContext = context;
   }
 
-  // Variable global para almacenar el contexto de la aplicación
   static GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  // Constructor actualizado para recibir ApiConfig
   AuthService(this._apiConfig) {
     _initDio();
-
-    // Suscribirse a cambios en la configuración
     _apiConfig.addListener(_updateDioBaseUrl);
+    _loadExplicitLogoutFlag(); // ✅ Cargar flag al inicio
   }
 
-  // Inicializar Dio con la configuración actual
   void _initDio() {
     _dio = Dio(BaseOptions(
       baseUrl: _apiConfig.apiUrl,
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 3),
+      extra: {'withCredentials': true},
     ));
   }
 
-  // Actualizar la URL base cuando cambia la configuración
   void _updateDioBaseUrl() {
     _dio.options.baseUrl = _apiConfig.apiUrl;
+    _dio.options.extra['withCredentials'] = true;
     debugPrint('URL base de Auth Service actualizada: ${_dio.options.baseUrl}');
+  }
+
+  // ✅ NUEVO: Cargar flag de logout explícito
+  Future<void> _loadExplicitLogoutFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _explicitLogout = prefs.getBool('explicit_logout') ?? false;
+
+      if (_explicitLogout) {
+        debugPrint('⚠️  Logout explícito previo detectado');
+      }
+    } catch (e) {
+      debugPrint('Error cargando flag de logout: $e');
+    }
   }
 
   void _startInactivityTimer(BuildContext? context) {
@@ -141,12 +136,10 @@ class AuthService extends ChangeNotifier {
       final difference = now.difference(_lastActivityTime);
       final timeUntilTimeout = inactivityTimeout - difference;
 
-      // Si es hora de mostrar la advertencia (30 segundos antes del timeout)
       if (timeUntilTimeout <= warningBeforeTimeout && !_isShowingWarning) {
         _showWarningDialog(timeUntilTimeout.inSeconds);
       }
 
-      // Si se ha alcanzado el tiempo de inactividad
       if (difference >= inactivityTimeout) {
         print(
             'Sesión cerrada por inactividad después de ${inactivityTimeout.inMinutes} minutos');
@@ -159,7 +152,6 @@ class AuthService extends ChangeNotifier {
   void _showWarningDialog(int secondsRemaining) {
     if (_isShowingWarning) return;
 
-    // Usar el navigatorKey global para obtener el contexto
     final context = navigatorKey.currentContext;
     if (context == null) {
       print('No se puede mostrar el diálogo: contexto no disponible');
@@ -199,27 +191,21 @@ class AuthService extends ChangeNotifier {
                 builder: (context, value, child) {
                   return Column(
                     children: [
-                      Text(
-                        'La sesión se cerrará en:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      Text('La sesión se cerrará en:',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Container(
                         width: 60,
                         height: 60,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF49B8E2),
-                        ),
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF49B8E2)),
                         child: Center(
-                          child: Text(
-                            '$value',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: Text('$value',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -235,7 +221,6 @@ class AuthService extends ChangeNotifier {
                 _isShowingWarning = false;
                 Navigator.of(dialogContext).pop();
                 logout();
-
                 _navigateToLogin();
               },
               child: const Text('Cerrar sesión ahora',
@@ -249,8 +234,7 @@ class AuthService extends ChangeNotifier {
                 Navigator.of(dialogContext).pop();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF49B8E2),
-              ),
+                  backgroundColor: const Color(0xFF49B8E2)),
               child: const Text('Continuar sesión',
                   style: TextStyle(color: Colors.white)),
             ),
@@ -278,20 +262,16 @@ class AuthService extends ChangeNotifier {
     if (navigatorKey.currentContext != null) {
       ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
         const SnackBar(
-          content: Text('Sesión cerrada por inactividad'),
-          backgroundColor: Colors.red,
-        ),
+            content: Text('Sesión cerrada por inactividad'),
+            backgroundColor: Colors.red),
       );
-
       _navigateToLogin();
     }
   }
 
   void startLoginScreenTimer(BuildContext context) {
     updateContext(context);
-
     _loginScreenTimer?.cancel();
-
     _loginScreenTimer = Timer(loginScreenTimeout, () {
       print(
           'Cerrando aplicación después de ${loginScreenTimeout.inMinutes} minutos de inactividad en login');
@@ -372,6 +352,10 @@ class AuthService extends ChangeNotifier {
           await _apiConfig.updateFromServerResponse(response.data['config']);
         }
 
+        // ✅ Limpiar flag de logout explícito en login exitoso
+        _explicitLogout = false;
+        await _saveSessionFlag(userData);
+
         _lastActivityTime = DateTime.now();
         _loginScreenTimer?.cancel();
         _startInactivityTimer(null);
@@ -381,6 +365,9 @@ class AuthService extends ChangeNotifier {
         await Future.delayed(const Duration(milliseconds: 100));
 
         _isProcessingLogin = false;
+
+        debugPrint(
+            '✅ Login exitoso - Cookie httpOnly establecida por servidor');
         return true;
       }
 
@@ -393,7 +380,120 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> _saveSessionFlag(Map<String, dynamic> userData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString('user_data', jsonEncode(userData));
+      await prefs.setBool('has_active_session', true);
+      await prefs.setInt(
+          'session_started_at', DateTime.now().millisecondsSinceEpoch);
+
+      // ✅ Limpiar flag de logout explícito
+      await prefs.remove('explicit_logout');
+
+      debugPrint('✅ Flag de sesión guardado (sin token)');
+    } catch (e) {
+      debugPrint('❌ Error guardando flag de sesión: $e');
+    }
+  }
+
+  // ✅ MODIFICADO: Verificar sesión con flag de logout explícito
+  Future<bool> checkActiveSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // ✅ CRÍTICO: Verificar logout explícito PRIMERO
+      _explicitLogout = prefs.getBool('explicit_logout') ?? false;
+
+      if (_explicitLogout) {
+        debugPrint('⚠️  Logout explícito detectado - NO restaurar sesión');
+        await prefs.remove('explicit_logout'); // Limpiar flag
+        _explicitLogout = false;
+        return false;
+      }
+
+      final hasSession = prefs.getBool('has_active_session') ?? false;
+
+      if (!hasSession) {
+        debugPrint('ℹ️ No hay flag de sesión activa');
+        return false;
+      }
+
+      debugPrint('🔐 Verificando sesión con backend...');
+
+      final response = await _dio.get(
+        '/auth/me',
+        options: Options(
+          validateStatus: (status) => status! < 500,
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final userData = response.data['user'];
+
+        final int funcion = userData['pmus_funcion'] ?? 1;
+        List<String> roles = [];
+
+        if (funcion == 1) {
+          roles = ['admin'];
+        } else if (funcion == 4) {
+          roles = ['monitoreador'];
+        } else {
+          roles = ['usuario'];
+        }
+
+        _currentUser = UserModel(
+          id: userData['pmus_id'] ?? 0,
+          codigo: userData['pmus_codigo'] ?? 0,
+          username: userData['pmus_usuario'] ?? '',
+          name: userData['pmus_usuario'] ?? '',
+          funcion: funcion,
+          roles: roles,
+        );
+
+        _lastActivityTime = DateTime.now();
+        _startInactivityTimer(null);
+
+        notifyListeners();
+
+        debugPrint('✅ Sesión restaurada desde cookie httpOnly');
+        debugPrint('✅ Usuario: ${_currentUser?.username}');
+        return true;
+      } else {
+        await clearSession();
+        debugPrint('❌ Sesión expirada (${response.statusCode})');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Error verificando sesión: $e');
+      await clearSession();
+      return false;
+    }
+  }
+
+  // ✅ MODIFICADO: Logout con flag explícito
+  Future<void> logout() async {
+    try {
+      debugPrint('🚪 Iniciando logout...');
+
+      // ✅ CRÍTICO: Marcar logout explícito ANTES de llamar al backend
+      _explicitLogout = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('explicit_logout', true);
+
+      debugPrint('✅ Flag de logout explícito marcado');
+
+      // Llamar al backend para borrar cookie httpOnly
+      await _dio.post('/auth/logout');
+      debugPrint('✅ Cookie httpOnly borrada por servidor');
+    } catch (e) {
+      debugPrint('⚠️ Error al llamar logout endpoint: $e');
+      // Incluso con error, mantener flag de logout explícito
+    }
+
+    await clearSession();
+
     _currentUser = null;
     _currentContext = null;
     _inactivityTimer?.cancel();
@@ -403,6 +503,23 @@ class AuthService extends ChangeNotifier {
     _warningTimer = null;
 
     notifyListeners();
+
+    debugPrint('✅ Logout completado');
+  }
+
+  Future<void> clearSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_data');
+      await prefs.remove('has_active_session');
+      await prefs.remove('session_started_at');
+
+      // ✅ NO remover 'explicit_logout' aquí - debe persistir para checkActiveSession
+
+      debugPrint('✅ Sesión local limpiada');
+    } catch (e) {
+      debugPrint('❌ Error limpiando sesión: $e');
+    }
   }
 
   void checkActivity(BuildContext context) {

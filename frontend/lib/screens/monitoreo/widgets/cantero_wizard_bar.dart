@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/constants.dart'; // ✅ AGREGADO: Import para usar CanteroRangeParser
 
 /// Widget que muestra la barra de navegación del wizard de canteros
 /// Se ubica entre la barra de sincronización y el formulario
@@ -645,6 +646,7 @@ class _CanteroRangeEditorState extends State<CanteroRangeEditor> {
   }
 
   Widget _buildRangePreview() {
+    // ✅ AHORA USA CanteroRangeParser de constants.dart
     final parser = CanteroRangeParser.parse(_controller.text);
 
     if (!parser.isValid) return const SizedBox.shrink();
@@ -679,135 +681,5 @@ class _CanteroRangeEditorState extends State<CanteroRangeEditor> {
   }
 }
 
-/// Clase utilitaria para parsear rangos de canteros
-/// ✅ ACEPTA: "4-8" o "4" (número único)
-/// ✅ NORMALIZA: "4" → "4-4" (formato estándar)
-class CanteroRangeParser {
-  final int inicio;
-  final int fin;
-  final int total;
-  final bool isValid;
-  final String? error;
-  final String? normalizedRange; // ✅ NUEVO: Formato normalizado "X-X"
-
-  CanteroRangeParser._({
-    required this.inicio,
-    required this.fin,
-    required this.total,
-    required this.isValid,
-    this.error,
-    this.normalizedRange,
-  });
-
-  /// Parsea un rango en formato "X-Y" o número único "X"
-  /// ✅ MEJORA: Acepta ambos formatos y normaliza a "X-X"
-  factory CanteroRangeParser.parse(String? range) {
-    if (range == null || range.isEmpty) {
-      return CanteroRangeParser._(
-        inicio: 0,
-        fin: 0,
-        total: 0,
-        isValid: false,
-        error: 'Rango vacío',
-      );
-    }
-
-    final trimmed = range.trim();
-
-    // ✅ NUEVO: Detectar si es un número único (sin guión)
-    if (!trimmed.contains('-')) {
-      final numero = int.tryParse(trimmed);
-
-      if (numero == null) {
-        return CanteroRangeParser._(
-          inicio: 0,
-          fin: 0,
-          total: 0,
-          isValid: false,
-          error: 'Valor no numérico',
-        );
-      }
-
-      if (numero < 1 || numero > 110) {
-        return CanteroRangeParser._(
-          inicio: numero,
-          fin: numero,
-          total: 0,
-          isValid: false,
-          error: 'Fuera de rango (1-110)',
-        );
-      }
-
-      // ✅ Número único válido → convertir a formato "X-X"
-      return CanteroRangeParser._(
-        inicio: numero,
-        fin: numero,
-        total: 1,
-        isValid: true,
-        normalizedRange: '$numero-$numero', // ✅ Formato normalizado
-      );
-    }
-
-    // Formato con guión "X-Y"
-    final parts = trimmed.split('-');
-    if (parts.length != 2) {
-      return CanteroRangeParser._(
-        inicio: 0,
-        fin: 0,
-        total: 0,
-        isValid: false,
-        error: 'Formato inválido',
-      );
-    }
-
-    final inicio = int.tryParse(parts[0].trim());
-    final fin = int.tryParse(parts[1].trim());
-
-    if (inicio == null || fin == null) {
-      return CanteroRangeParser._(
-        inicio: 0,
-        fin: 0,
-        total: 0,
-        isValid: false,
-        error: 'Valores no numéricos',
-      );
-    }
-
-    if (inicio > fin) {
-      return CanteroRangeParser._(
-        inicio: inicio,
-        fin: fin,
-        total: 0,
-        isValid: false,
-        error: 'Inicio mayor que fin',
-      );
-    }
-
-    if (inicio < 1 || fin > 110) {
-      return CanteroRangeParser._(
-        inicio: inicio,
-        fin: fin,
-        total: 0,
-        isValid: false,
-        error: 'Fuera de rango (1-110)',
-      );
-    }
-
-    return CanteroRangeParser._(
-      inicio: inicio,
-      fin: fin,
-      total: fin - inicio + 1,
-      isValid: true,
-      normalizedRange: '$inicio-$fin', // ✅ Formato normalizado
-    );
-  }
-
-  /// Verifica si el rango contiene un solo cantero (sin wizard)
-  bool get isSingleCantero => total == 1;
-
-  /// Genera lista de canteros en el rango
-  List<int> get canterosList {
-    if (!isValid) return [];
-    return List.generate(total, (i) => inicio + i);
-  }
-}
+// ❌ ELIMINADA: La clase CanteroRangeParser ahora está en constants.dart
+// ✅ Se usa mediante: import '../utils/constants.dart';

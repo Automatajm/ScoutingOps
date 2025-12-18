@@ -19,6 +19,7 @@ class ServiceProvider extends StatelessWidget {
   final ApiConfig apiConfig;
   final AppDatabase database;
   final OfflineDatabaseService offlineDbService;
+  final AuthService authService; // ✅ NUEVO: Agregar parámetro
 
   const ServiceProvider({
     Key? key,
@@ -27,6 +28,7 @@ class ServiceProvider extends StatelessWidget {
     required this.apiConfig,
     required this.database,
     required this.offlineDbService,
+    required this.authService, // ✅ NUEVO: Agregar parámetro requerido
   }) : super(key: key);
 
   @override
@@ -56,11 +58,9 @@ class ServiceProvider extends StatelessWidget {
           ),
         ),
 
-        // AuthService
-        ChangeNotifierProvider(
-          create: (context) => AuthService(
-            Provider.of<ApiConfig>(context, listen: false),
-          ),
+        // ✅ MODIFICADO: AuthService - Usar instancia existente en vez de crear nueva
+        ChangeNotifierProvider<AuthService>.value(
+          value: authService, // ✅ Usar la instancia pasada desde main.dart
         ),
 
         // SyncQueueService

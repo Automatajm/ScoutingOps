@@ -73,7 +73,7 @@ dependencies:
   
   # ===== DEVICE INFO =====
   device_info_plus: ^9.1.1
-  package_info_plus: ^4.2.0
+  package_info_plus: ^8.0.0
   responsive_framework: ^1.1.1
   fluttertoast: ^8.2.4
 

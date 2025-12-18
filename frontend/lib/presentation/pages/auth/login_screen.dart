@@ -14,11 +14,16 @@ class OverlayLoginWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [OverlayLoginWrapper.build] Construyendo wrapper...');
     return Material(
       child: Overlay(
         initialEntries: [
           OverlayEntry(
-            builder: (context) => child,
+            builder: (context) {
+              debugPrint(
+                  '🎨 [OverlayLoginWrapper.OverlayEntry] Construyendo entry...');
+              return child;
+            },
           ),
         ],
       ),
@@ -30,7 +35,10 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() {
+    debugPrint('🏗️ [LoginScreen] Creando state...');
+    return _LoginScreenState();
+  }
 }
 
 class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
@@ -52,26 +60,52 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    debugPrint('🔐 [LoginScreen.initState] Inicializando LoginScreen...');
+
     // Registrar observer para detectar cambios en la app
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Iniciar temporizador de pantalla de login
-      _authService = Provider.of<AuthService>(context, listen: false);
-      _apiConfig = Provider.of<ApiConfig>(context, listen: false);
-      _authService.startLoginScreenTimer(context);
+      debugPrint('🔐 [LoginScreen.postFrameCallback] Ejecutando callback...');
+
+      try {
+        // Iniciar temporizador de pantalla de login
+        _authService = Provider.of<AuthService>(context, listen: false);
+        _apiConfig = Provider.of<ApiConfig>(context, listen: false);
+
+        debugPrint(
+            '🔐 [LoginScreen] AuthService obtenido: ${_authService != null}');
+        debugPrint(
+            '🔐 [LoginScreen] ApiConfig obtenido: ${_apiConfig != null}');
+
+        _authService.startLoginScreenTimer(context);
+
+        debugPrint('✅ [LoginScreen] Inicialización completa');
+      } catch (e) {
+        debugPrint('❌ [LoginScreen] Error en postFrameCallback: $e');
+      }
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _authService = Provider.of<AuthService>(context, listen: false);
-    _apiConfig = Provider.of<ApiConfig>(context, listen: false);
+    debugPrint(
+        '🔄 [LoginScreen.didChangeDependencies] Dependencias cambiadas...');
+
+    try {
+      _authService = Provider.of<AuthService>(context, listen: false);
+      _apiConfig = Provider.of<ApiConfig>(context, listen: false);
+      debugPrint(
+          '✅ [LoginScreen] Providers actualizados en didChangeDependencies');
+    } catch (e) {
+      debugPrint('❌ [LoginScreen] Error obteniendo providers: $e');
+    }
   }
 
   @override
   void dispose() {
+    debugPrint('🗑️ [LoginScreen.dispose] Limpiando recursos...');
     _userController.dispose();
     _passwordController.dispose();
     _userFocusNode.dispose();
@@ -82,6 +116,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('🔄 [LoginScreen] App lifecycle: $state');
     // Detectar cuando la app vuelve al primer plano
     if (state == AppLifecycleState.resumed) {
       _authService.resetLoginScreenTimer(context);
@@ -98,11 +133,13 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   void _showConfigurationScreen() {
+    debugPrint('⚙️ [LoginScreen] Abriendo ConfigurationScreen...');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ConfigurationScreen(
           apiConfig: _apiConfig,
           onConfigSuccess: () {
+            debugPrint('✅ [LoginScreen] Configuración guardada exitosamente');
             // Simplemente volver al login
             Navigator.of(context).pop();
             // Mostrar mensaje de confirmación
@@ -119,7 +156,12 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    debugPrint('🔑 [LoginScreen] Intentando login...');
+
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('❌ [LoginScreen] Validación de formulario falló');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -127,22 +169,28 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     });
 
     try {
+      debugPrint('🔑 [LoginScreen] Llamando authService.login...');
       final success = await _authService.login(
         _userController.text,
         _passwordController.text,
       );
 
+      debugPrint('🔑 [LoginScreen] Login result: $success');
+
       if (mounted) {
         if (success) {
+          debugPrint('✅ [LoginScreen] Login exitoso, navegando...');
           // Navegación mejorada - usar pushReplacementNamed para evitar capas superpuestas
           _navigateBasedOnRole(_authService);
         } else {
+          debugPrint('❌ [LoginScreen] Login falló - credenciales incorrectas');
           setState(() {
             _errorMessage = 'Usuario o contraseña incorrectos';
           });
         }
       }
     } catch (e) {
+      debugPrint('❌ [LoginScreen] Error en login: $e');
       if (mounted) {
         setState(() {
           _errorMessage = 'Error al iniciar sesión: $e';
@@ -159,6 +207,10 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   // Método actualizado para redirigir según el rol del usuario
   void _navigateBasedOnRole(AuthService authService) {
+    debugPrint('🧭 [LoginScreen] Navegando basado en rol...');
+    debugPrint('   - isAdmin: ${authService.isAdmin}');
+    debugPrint('   - isMonitoreador: ${authService.isMonitoreador}');
+
     // ✅ NUEVO: Actualizar contexto en AuthService para detección de dispositivo
     authService.updateContext(context);
 
@@ -169,19 +221,25 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
+    debugPrint('   - screenWidth: $screenWidth');
+    debugPrint('   - isMobile: $isMobile');
+
     if (authService.isAdmin && isMobile) {
+      debugPrint('🎯 [LoginScreen] Admin en móvil → Monitoreo');
       // Admin en móvil: ir a MonitoreoScreen (sin filtros)
       navigator.pushNamedAndRemoveUntil(
         RoutesManager.monitoreo,
         (route) => false,
       );
     } else if (authService.isMonitoreador && !authService.isAdmin) {
+      debugPrint('🎯 [LoginScreen] Monitoreador → Monitoreo');
       // Monitoreador normal: ir a MonitoreoScreen (con filtros)
       navigator.pushNamedAndRemoveUntil(
         RoutesManager.monitoreo,
         (route) => false,
       );
     } else {
+      debugPrint('🎯 [LoginScreen] Usuario normal/Admin desktop → Home');
       // Admin en desktop o usuarios normales: ir al Home
       navigator.pushNamedAndRemoveUntil(
         RoutesManager.home,
@@ -191,6 +249,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   void _onSubmit(BuildContext context) {
+    debugPrint('📝 [LoginScreen] Form submitted');
     if (_userController.text.isEmpty) {
       FocusScope.of(context).requestFocus(_userFocusNode);
     } else if (_passwordController.text.isEmpty) {
@@ -210,17 +269,22 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [LoginScreen.build] Construyendo UI...');
+
     final mediaQuery = MediaQuery.of(context);
     final keyboardHeight = mediaQuery.viewInsets.bottom;
     final screenWidth = mediaQuery.size.width;
     final isKeyboardOpen = keyboardHeight > 0;
     final isMobile = screenWidth < 600;
 
+    debugPrint('   - screenWidth: $screenWidth');
+    debugPrint('   - isMobile: $isMobile');
+    debugPrint('   - isKeyboardOpen: $isKeyboardOpen');
+
     return OverlayLoginWrapper(
       child: Scaffold(
         backgroundColor: Colors.white,
         resizeToAvoidBottomInset: true,
-        // ✅ REMOVIDO: AppBar con botón de configuración (cliente no lo quiere visible)
         body: Listener(
           onPointerDown: (_) => _handleUserActivity(),
           behavior: HitTestBehavior.translucent,
@@ -339,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
                       SizedBox(height: isMobile ? 12 : 16),
 
-                      // ✅ CORREGIDO: Password Input con funcionalidad de mostrar/ocultar arreglada
+                      // Password Input
                       TextFormField(
                         controller: _passwordController,
                         focusNode: _passwordFocusNode,
@@ -438,7 +502,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                               ),
                       ),
 
-                      // ✅ Footer Links - Solo mostrar cuando no hay teclado en móvil
+                      // Footer Links - Solo mostrar cuando no hay teclado en móvil
                       if (!isKeyboardOpen || !isMobile) ...[
                         SizedBox(height: isMobile ? 12 : 16),
                         Row(
@@ -506,11 +570,10 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ],
                         ),
 
-                        // ✅ NUEVO: Acceso discreto a configuración (solo para administradores)
+                        // Acceso discreto a configuración
                         SizedBox(height: isMobile ? 8 : 12),
                         GestureDetector(
                           onTap: () {
-                            // Acceso discreto para administradores
                             _showConfigurationScreen();
                           },
                           child: Container(

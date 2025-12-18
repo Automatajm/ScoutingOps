@@ -18,4 +18,4 @@ RUN mkdir -p logs uploads
 
 EXPOSE 8000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["npm", "run", "prod"]

@@ -1,0 +1,163 @@
+# =====================================================
+# CONFIGURACIÓN PEST CONTROL - MULTI-CLIENTE
+# =====================================================
+# Este archivo funciona para TODOS los entornos y TODOS los clientes
+# La configuración se auto-detecta según el contexto de ejecución
+
+# =====================================================
+# 🏢 CLIENTE (ÚNICA VARIABLE QUE DEBES CAMBIAR)
+# =====================================================
+CLIENT_NAME=drpestcontrol
+# Otros valores posibles: micliente, otroempresa, etc.
+
+# =====================================================
+# 🎯 DETECCIÓN AUTOMÁTICA DE ENTORNO
+# =====================================================
+# Estas variables se auto-configuran según el contexto:
+# - Docker: FLAVOR=production
+# - Desarrollo local: FLAVOR=development
+# - Staging: FLAVOR=staging
+#
+# FLAVOR se puede forzar con: npm start --flavor=production
+FLAVOR=production
+NODE_ENV=production
+ENVIRONMENT=production
+
+# =====================================================
+# 📡 CONFIGURACIÓN DE RED
+# =====================================================
+# Backend
+BACKEND_PORT=8000
+BACKEND_HOST=0.0.0.0
+
+# Frontend
+FRONTEND_PORT=8080
+
+# Database
+DB_PORT=5432
+
+# =====================================================
+# 🗄️ BASE DE DATOS
+# =====================================================
+# Desarrollo Local
+DB_HOST_LOCAL=localhost
+DB_NAME_LOCAL=Pest_Control
+DB_USER_LOCAL=postgres
+DB_PASSWORD_LOCAL=0824
+
+# Producción Docker
+DB_HOST_DOCKER=postgres
+DB_NAME_DOCKER=pest_control
+DB_USER_DOCKER=pestuser
+DB_PASSWORD_DOCKER=pestpass123
+
+# ✅ AGREGADO: Variables cortas para docker-compose (apuntan a Docker)
+DB_HOST=postgres
+DB_NAME=pest_control
+DB_USER=pestuser
+DB_PASSWORD=pestpass123
+
+# Pool de Conexiones (se ajusta automáticamente según FLAVOR)
+DB_POOL_MAX=20
+DB_POOL_MIN=5
+DB_IDLE_TIMEOUT=10000
+DB_CONNECTION_TIMEOUT=5000
+
+# =====================================================
+# 🔐 SEGURIDAD
+# =====================================================
+# JWT
+JWT_SECRET=pest-control-secret-2024-CHANGE-IN-PRODUCTION
+JWT_EXPIRATION=30m
+SALT_ROUNDS=10
+
+# SSL/TLS
+SSL_ENABLED=true
+USE_HTTPS=true
+VERIFY_SSL=false
+TRUST_SELF_SIGNED=true
+ALLOW_SELF_SIGNED_CERTS=true
+
+# =====================================================
+# 🚦 RATE LIMITING (Uso Industrial)
+# =====================================================
+RATE_LIMIT_WINDOW=15
+RATE_LIMIT_MAX_REQUESTS=1000
+AUTH_RATE_LIMIT_MAX=50
+
+# =====================================================
+# ⏱️ TIMEOUTS
+# =====================================================
+REQUEST_TIMEOUT=30000
+CONNECT_TIMEOUT=10000
+SERVER_TIMEOUT=30000
+RETRY_ATTEMPTS=3
+
+# =====================================================
+# 📝 LOGGING
+# =====================================================
+DEBUG_MODE=false
+LOG_LEVEL=info
+LOG_API_CALLS=true
+LOG_ERRORS=true
+
+# =====================================================
+# 🔧 HERRAMIENTAS
+# =====================================================
+# PgAdmin
+PGADMIN_EMAIL=admin@pestcontrol.com
+PGADMIN_PASSWORD=admin123
+PGADMIN_PORT=5050
+
+# Analytics
+ANALYTICS_ENABLED=false
+ERROR_REPORTING=false
+
+# =====================================================
+# 🌐 URLS Y CORS
+# =====================================================
+# Estas se auto-generan según entorno y CLIENT_NAME en tu código
+# Pero docker-compose las necesita explícitas:
+
+# ✅ AGREGADO: CORS Origins para Docker
+CORS_ORIGIN=https://localhost:8080,https://drpestcontrol:8080,http://localhost:8080,http://drpestcontrol:8080
+CORS_ORIGINS=https://localhost:8080,https://drpestcontrol:8080,http://localhost:8080,http://drpestcontrol:8080
+CORS_ENABLED=true
+CORS_CREDENTIALS=true
+
+# Sobrescritura manual (si es necesario):
+# MANUAL_API_URL=https://192.168.1.100:8000/api
+# MANUAL_BACKEND_URL=https://192.168.1.100:8000
+
+# =====================================================
+# 📱 FRONTEND BUILD
+# =====================================================
+APP_NAME=PestControl
+VERSION=1.0.0
+
+# =====================================================
+# 🐳 DOCKER (Solo para docker-compose)
+# =====================================================
+COMPOSE_PROJECT_NAME=pestcontrol
+
+# =====================================================
+# 📝 NOTAS DE USO
+# =====================================================
+# Para cambiar entre entornos:
+#
+# 🏠 DESARROLLO LOCAL:
+#   FLAVOR=development
+#   NODE_ENV=development
+#   ENVIRONMENT=development
+#   (Usa DB_HOST_LOCAL, DB_NAME_LOCAL, etc.)
+#
+# 🐳 DOCKER PRODUCCIÓN:
+#   FLAVOR=production
+#   NODE_ENV=production
+#   ENVIRONMENT=production
+#   (Usa DB_HOST_DOCKER o las variables cortas DB_HOST, DB_NAME, etc.)
+#
+# 🎭 STAGING:
+#   FLAVOR=staging
+#   NODE_ENV=staging
+#   ENVIRONMENT=staging

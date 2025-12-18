@@ -58,25 +58,43 @@ class _AppStartupState extends State<AppStartup> {
   @override
   void initState() {
     super.initState();
+    debugPrint('🔄 [AppStartup.initState] Inicializando widget...');
     _initializeApp();
   }
 
   Future<void> _initializeApp() async {
     try {
+      debugPrint('🔍 [AppStartup._initializeApp] Iniciando verificación...');
+
       final isConfigured = widget.apiConfig.isConfigured;
       final hasValidUrls = widget.apiConfig.baseUrl.isNotEmpty &&
           widget.apiConfig.apiUrl.isNotEmpty;
 
+      debugPrint('🔍 [AppStartup] isConfigured: $isConfigured');
+      debugPrint('🔍 [AppStartup] baseUrl: "${widget.apiConfig.baseUrl}"');
+      debugPrint('🔍 [AppStartup] apiUrl: "${widget.apiConfig.apiUrl}"');
+      debugPrint('🔍 [AppStartup] hasValidUrls: $hasValidUrls');
+
       final needsConfig = !isConfigured || !hasValidUrls;
+
+      debugPrint('🔍 [AppStartup] needsConfig: $needsConfig');
+      debugPrint('🔍 [AppStartup] Intentando cambiar estado...');
+      debugPrint('   - mounted: $mounted');
 
       if (mounted) {
         setState(() {
           _isInitializing = false;
           _needsConfiguration = needsConfig;
         });
+
+        debugPrint('✅ [AppStartup] Estado actualizado exitosamente');
+        debugPrint('   - _isInitializing: $_isInitializing');
+        debugPrint('   - _needsConfiguration: $_needsConfiguration');
+      } else {
+        debugPrint('❌ [AppStartup] Widget no mounted!');
       }
     } catch (e) {
-      debugPrint('Error inicializando: $e');
+      debugPrint('❌ [AppStartup] Error inicializando: $e');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -87,20 +105,37 @@ class _AppStartupState extends State<AppStartup> {
   }
 
   void _refreshConfigurationState() {
+    debugPrint(
+        '🔄 [AppStartup._refreshConfigurationState] Refrescando estado...');
+
     if (mounted) {
       final isConfigured = widget.apiConfig.isConfigured;
       final hasValidUrls = widget.apiConfig.baseUrl.isNotEmpty &&
           widget.apiConfig.apiUrl.isNotEmpty;
 
+      debugPrint('🔄 [AppStartup] isConfigured: $isConfigured');
+      debugPrint('🔄 [AppStartup] hasValidUrls: $hasValidUrls');
+
       setState(() {
         _needsConfiguration = !isConfigured || !hasValidUrls;
       });
+
+      debugPrint('✅ [AppStartup] Estado refrescado');
+      debugPrint('   - _needsConfiguration: $_needsConfiguration');
+    } else {
+      debugPrint('❌ [AppStartup] Widget no mounted al refrescar!');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [AppStartup.build] Construyendo UI...');
+    debugPrint('   - _isInitializing: $_isInitializing');
+    debugPrint('   - _needsConfiguration: $_needsConfiguration');
+
     if (_isInitializing) {
+      debugPrint(
+          '🔵 [AppStartup.build] Mostrando pantalla de inicialización (azul)');
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
@@ -146,6 +181,7 @@ class _AppStartupState extends State<AppStartup> {
     }
 
     if (_needsConfiguration) {
+      debugPrint('⚙️ [AppStartup.build] Mostrando ConfigurationScreen');
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -156,11 +192,16 @@ class _AppStartupState extends State<AppStartup> {
         ),
         home: ConfigurationScreen(
           apiConfig: widget.apiConfig,
-          onConfigSuccess: () => _refreshConfigurationState(),
+          onConfigSuccess: () {
+            debugPrint(
+                '✅ [AppStartup] onConfigSuccess llamado desde ConfigurationScreen');
+            _refreshConfigurationState();
+          },
         ),
       );
     }
 
+    debugPrint('🎯 [AppStartup.build] Mostrando widget.child (MyApp → Login)');
     return widget.child;
   }
 }
@@ -205,6 +246,23 @@ void main() async {
     LoteService().setDatabase(database);
     debugPrint('📦 LoteService configurado con SQLite');
 
+    // ✅ NUEVO: Crear AuthService y verificar sesión activa
+    final authService = AuthService(apiConfig);
+
+    debugPrint('🔐 Verificando sesión activa...');
+    try {
+      final hasActiveSession = await authService.checkActiveSession();
+
+      if (hasActiveSession) {
+        debugPrint('✅ Sesión restaurada exitosamente');
+        debugPrint('✅ Usuario: ${authService.currentUser?.username}');
+      } else {
+        debugPrint('ℹ️ No hay sesión activa - mostrando login');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error verificando sesión: $e');
+    }
+
     // Manejador de errores
     FlutterError.onError = (details) {
       debugPrint('❌ ERROR: ${details.exception}');
@@ -221,6 +279,8 @@ void main() async {
           intranetService: intranetService,
           database: database,
           offlineDbService: offlineDbService,
+          // ✅ NUEVO: Pasar authService al ServiceProvider
+          authService: authService,
           child: const MyApp(),
         ),
       ),
@@ -283,19 +343,33 @@ class _MyAppState extends State<MyApp> {
   bool _catalogSyncInitiated = false;
 
   @override
+  void initState() {
+    super.initState();
+    debugPrint('🎬 [MyApp.initState] MyApp inicializándose...');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [MyApp.build] Construyendo MaterialApp...');
+
     return Consumer<AuthService>(
       builder: (context, authService, child) {
+        debugPrint('🔄 [MyApp.Consumer] Builder ejecutándose...');
+
         final intranetService =
             Provider.of<IntranetService>(context, listen: false);
 
         // Iniciar sincronización de catálogos una vez
         if (!_catalogSyncInitiated) {
           _catalogSyncInitiated = true;
+          debugPrint('📦 [MyApp] Programando sincronización de catálogos...');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _initCatalogSync(context);
           });
         }
+
+        debugPrint(
+            '🚀 [MyApp] Creando MaterialApp con ruta inicial: ${RoutesManager.login}');
 
         return MaterialApp(
           title: 'Pest Control - Costa Analytics',
@@ -326,6 +400,8 @@ class _MyAppState extends State<MyApp> {
             ),
           ),
           builder: (context, child) {
+            debugPrint('🏗️ [MyApp.builder] Construyendo contenido de app...');
+
             WidgetsBinding.instance.addPostFrameCallback((_) {
               AppInitializer.overlayState;
             });
@@ -341,8 +417,14 @@ class _MyAppState extends State<MyApp> {
             final isLoginScreen = currentRouteName == RoutesManager.login ||
                 currentRouteName == null;
 
-            if (isLoginScreen) return wrappedChild;
+            if (isLoginScreen) {
+              debugPrint(
+                  '🔐 [MyApp.builder] Ruta actual: Login/null - mostrando sin overlay');
+              return wrappedChild;
+            }
 
+            debugPrint(
+                '📱 [MyApp.builder] Ruta actual: $currentRouteName - mostrando con overlay');
             return Stack(
               children: [
                 wrappedChild,
