@@ -7,6 +7,8 @@ import '../../../data/datasources/auth_service.dart';
 import '../utils/constants.dart';
 import '../widgets/data_cells.dart';
 import '../widgets/responsive_card.dart';
+// ✅ CORRECTO: Import usando ruta del proyecto
+import 'package:pestcontrol/screens/monitoreo/widgets/searchable_variedad_selector.dart';
 
 class ConsultaTab extends StatefulWidget {
   final List<Monitoreo> monitoreos;
@@ -224,10 +226,11 @@ class _ConsultaTabState extends State<ConsultaTab> {
       'Todos',
       ...widget.canteros.where((cantero) => cantero != 'Todos')
     ];
-    final List<String> filtrosVariedades = [
-      'Todas',
-      ...widget.variedades.where((variedad) => variedad != 'Todas')
-    ];
+    
+    // ✅ NUEVO: Preparar variedades para el selector mejorado (sin "Todas")
+    final List<String> filtrosVariedades = widget.variedades
+        .where((variedad) => variedad != 'Todas')
+        .toList();
 
     // Obtener el servicio de autenticación y monitoreo
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -243,35 +246,7 @@ class _ConsultaTabState extends State<ConsultaTab> {
       padding: EdgeInsets.all(widget.isSmallScreen ? 8 : 16),
       child: Column(
         children: [
-          // ✅ REMOVIDO: Banner persistente de modo filtrado (ahora es mensaje temporal)
-
-          // Banner de cambios pendientes
-          if (widget.pendingChangesCount > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.sync_problem,
-                      color: Colors.orange.shade800, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Hay ${widget.pendingChangesCount} cambios pendientes de sincronizar.',
-                      style: TextStyle(
-                          color: Colors.orange.shade800,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // ✅ ELIMINADO: Banner de cambios pendientes (redundante)
 
           // Contenido principal adaptable
           Expanded(
@@ -390,17 +365,15 @@ class _ConsultaTabState extends State<ConsultaTab> {
 
                     const SizedBox(width: 16),
 
-                    // Filtro Variedad
+                    // ✅ NUEVO: Filtro Variedad con búsqueda
                     Expanded(
-                      child: _buildFilterDropdown(
+                      child: SearchableVariedadSelector(
                         label: 'Variedad',
                         hint: 'Seleccione variedad',
                         options: filtrosVariedades,
                         value: widget.selectedVariedad,
-                        onChanged: (value) {
-                          widget.onVariedadChanged(
-                              value == 'Todas' ? null : value);
-                        },
+                        onChanged: widget.onVariedadChanged,
+                        enabled: true,
                       ),
                     ),
                   ],
@@ -698,16 +671,14 @@ class _ConsultaTabState extends State<ConsultaTab> {
                                       ),
                                       const SizedBox(height: 12),
 
-                                      // Variedad
-                                      _buildFilterDropdown(
+                                      // ✅ NUEVO: Variedad con búsqueda
+                                      SearchableVariedadSelector(
                                         label: 'Variedad',
                                         hint: 'Seleccione variedad',
                                         options: filtrosVariedades,
                                         value: widget.selectedVariedad,
-                                        onChanged: (value) {
-                                          widget.onVariedadChanged(
-                                              value == 'Todas' ? null : value);
-                                        },
+                                        onChanged: widget.onVariedadChanged,
+                                        enabled: true,
                                       ),
                                     ],
                                   ),

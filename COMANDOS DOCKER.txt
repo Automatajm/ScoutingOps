@@ -1,0 +1,20 @@
+# 🚀 Iniciar con pgAdmin
+docker-compose --profile tools up -d --build
+
+# 📥 Restaurar tu backup
+docker cp "C:\Users\owner\Desktop\pestcontrol\backups\pest_control_backup.sql" pest_control_db:/tmp/backup.sql
+docker exec pest_control_db pg_restore -U pestuser -d pest_control -v -c /tmp/backup.sql
+docker-compose restart backend
+
+# 💾 Crear backup
+docker exec pest_control_db pg_dump -U pestuser -d pest_control -F c -f /backups/backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').backup
+
+# 📊 Ver estado
+docker-compose ps
+
+# ⏹️ Detener
+docker-compose down
+
+# 🌐 URLs
+# Frontend: https://localhost:8080
+# pgAdmin:  http://localhost:5050

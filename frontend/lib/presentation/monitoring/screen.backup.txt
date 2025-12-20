@@ -2152,30 +2152,6 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       final nivelMuestra2 = _selectedNivelMuestra2 != null ? int.tryParse(_selectedNivelMuestra2!) : null;
       final nivelMuestra3 = _selectedNivelMuestra3 != null ? int.tryParse(_selectedNivelMuestra3!) : null;
 
-      // ===== ⭐ CALCULAR NIVELES AUTOMÁTICOS =====
-      final nivelAutomatico1 = NivelCalculator.calcularNivelAutomatico(
-        muestra1 > 0 ? muestra1 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      final nivelAutomatico2 = NivelCalculator.calcularNivelAutomatico(
-        muestra2 > 0 ? muestra2 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      final nivelAutomatico3 = NivelCalculator.calcularNivelAutomatico(
-        muestra3 > 0 ? muestra3 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      debugPrint('🔢 [NIVEL_CALC] Niveles automáticos calculados:');
-      debugPrint('   Muestra 1: $muestra1 → Nivel: $nivelAutomatico1 (límites: $_limiteNivel1/$_limiteNivel2)');
-      debugPrint('   Muestra 2: $muestra2 → Nivel: $nivelAutomatico2');
-      debugPrint('   Muestra 3: $muestra3 → Nivel: $nivelAutomatico3');
-
       final idVariedad = _obtenerIdVariedad(_selectedVariedad);
       
       // IMPORTANTE: En modo wizard, siempre usar el rango completo en pmmo_canteros
@@ -2197,8 +2173,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_secuencia: _currentMonitoreo?.pmmo_secuencia,
         pmlt_codigo: _codigoLoteController.text,
         pmmo_casa: _selectedCasa ?? _casaController.text,
-        pmmo_cantero: _canteroController.text,
-        pmmo_canteros: canterosParaGuardar,
+        pmmo_cantero: _canteroController.text,  // Cantero individual actual
+        pmmo_canteros: canterosParaGuardar,  // Rango completo (en wizard) o individual (normal)
         pmmo_variedad: _selectedVariedad ?? '',
         pmmo_idvariedad: idVariedad,
         pmmo_grower: _responsableController.text,
@@ -2211,36 +2187,17 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_estatus: 1,
         pmmo_creadopor: userId,
         pmmo_fechacreacion: DateTime.now(),
-        
-        // Niveles MANUALES (seleccionados por usuario)
         pmmo_nivmuestram1: nivelMuestra1,
         pmmo_nivmuestram2: nivelMuestra2,
         pmmo_nivmuestram3: nivelMuestra3,
-        
-        // ===== ⭐ Niveles AUTOMÁTICOS (calculados por sistema) =====
-        pmmo_nivmuestraa1: nivelAutomatico1,
-        pmmo_nivmuestraa2: nivelAutomatico2,
-        pmmo_nivmuestraa3: nivelAutomatico3,
-        
-        // Muestras
         pmmo_muestra1: muestra1,
         pmmo_muestra2: muestra2,
         pmmo_muestra3: muestra3,
-        
-        // Límites (para referencia)
         lmsupniv1: _limiteNivel1,
         lmsupniv2: _limiteNivel2,
         lmsupniv3: _limiteNivel3,
-        
         pmmo_contenedor: _loteContenedorOriginal,
       );
-
-      debugPrint('📦 [MONITOREO] Objeto creado con niveles automáticos:');
-      debugPrint('   pmmo_nivmuestraa1: $nivelAutomatico1');
-      debugPrint('   pmmo_nivmuestraa2: $nivelAutomatico2');
-      debugPrint('   pmmo_nivmuestraa3: $nivelAutomatico3');
-      debugPrint('   lmsupniv1: $_limiteNivel1, lmsupniv2: $_limiteNivel2, lmsupniv3: $_limiteNivel3');
-
 
       if (intranetService == null || !intranetService.isConnected.value) {
         // Modo OFFLINE
@@ -2445,27 +2402,6 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       final nivelMuestra2 = _selectedNivelMuestra2 != null ? int.tryParse(_selectedNivelMuestra2!) : null;
       final nivelMuestra3 = _selectedNivelMuestra3 != null ? int.tryParse(_selectedNivelMuestra3!) : null;
 
-      // ===== ⭐ CALCULAR NIVELES AUTOMÁTICOS =====
-      final nivelAutomatico1 = NivelCalculator.calcularNivelAutomatico(
-        muestra1 > 0 ? muestra1 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      final nivelAutomatico2 = NivelCalculator.calcularNivelAutomatico(
-        muestra2 > 0 ? muestra2 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      final nivelAutomatico3 = NivelCalculator.calcularNivelAutomatico(
-        muestra3 > 0 ? muestra3 : null,
-        _limiteNivel1,
-        _limiteNivel2,
-      );
-
-      debugPrint('🔢 [NIVEL_CALC_PARCIAL] Niveles automáticos: $nivelAutomatico1, $nivelAutomatico2, $nivelAutomatico3');
-
       final idVariedad = _obtenerIdVariedad(_selectedVariedad);
       
       // IMPORTANTE: En modo wizard, siempre usar el rango completo en pmmo_canteros
@@ -2486,8 +2422,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_secuencia: _currentMonitoreo?.pmmo_secuencia,
         pmlt_codigo: _codigoLoteController.text,
         pmmo_casa: _selectedCasa!,
-        pmmo_cantero: _canteroController.text,
-        pmmo_canteros: canterosParaGuardar,
+        pmmo_cantero: _canteroController.text,  // Cantero individual actual
+        pmmo_canteros: canterosParaGuardar,  // Rango completo (en wizard) o individual (normal)
         pmmo_variedad: _selectedVariedad ?? '',
         pmmo_idvariedad: idVariedad,
         pmmo_grower: _responsableController.text,
@@ -2500,27 +2436,15 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_estatus: 1,
         pmmo_creadopor: userId,
         pmmo_fechacreacion: DateTime.now(),
-        
-        // Niveles MANUALES
         pmmo_nivmuestram1: nivelMuestra1,
         pmmo_nivmuestram2: nivelMuestra2,
         pmmo_nivmuestram3: nivelMuestra3,
-        
-        // ===== ⭐ Niveles AUTOMÁTICOS =====
-        pmmo_nivmuestraa1: nivelAutomatico1,
-        pmmo_nivmuestraa2: nivelAutomatico2,
-        pmmo_nivmuestraa3: nivelAutomatico3,
-        
-        // Muestras
         pmmo_muestra1: muestra1,
         pmmo_muestra2: muestra2,
         pmmo_muestra3: muestra3,
-        
-        // Límites
         lmsupniv1: _limiteNivel1,
         lmsupniv2: _limiteNivel2,
         lmsupniv3: _limiteNivel3,
-        
         pmmo_contenedor: _loteContenedorOriginal,
       );
 
