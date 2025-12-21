@@ -281,6 +281,84 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT - Actualizar múltiples lotes (endpoint para actualización masiva) usando stored procedure
+router.put('/bulk-update', async (req, res) => {
+  try {
+    const { lotes } = req.body;
+    
+    console.log(`🔄 Iniciando actualización masiva de ${lotes?.length || 0} lotes usando stored procedure`);
+    
+    if (!lotes || !Array.isArray(lotes) || lotes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se proporcionaron lotes para actualizar'
+      });
+    }
+    
+    // Validar que todos los lotes tengan ID
+    const lotesSinId = lotes.filter(l => !l.pmlt_secuencia);
+    if (lotesSinId.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `${lotesSinId.length} lotes sin ID de secuencia. Todos los lotes deben tener pmlt_secuencia para actualizar.`
+      });
+    }
+    
+    // Usar el módulo db compartido
+    const db = req.app.get('db');
+    
+    // Llamar al stored procedure para actualización masiva con mejor manejo de errores
+    let result;
+    try {
+      result = await db.query(
+        'SELECT * FROM sp_update_lotes_bulk($1)',
+        [JSON.stringify(lotes)]
+      );
+    } catch (queryError) {
+      logQueryError(queryError, 'SELECT * FROM sp_update_lotes_bulk($1)', ['[DATOS LOTES]']);
+      throw queryError;
+    }
+    
+    // Verificar si hubo un error en la respuesta del SP
+    if (!result.rows || result.rows.length === 0) {
+      console.error('Stored procedure no devolvió resultados');
+      return res.status(500).json({
+        success: false,
+        message: 'Error interno en la actualización masiva de lotes'
+      });
+    }
+    
+    console.log('Resultado de SP:', result.rows[0]);
+    const { success, message, actualizados, errores } = result.rows[0];
+    
+    if (!success) {
+      console.log(`Error en actualización masiva: ${message}`);
+      return res.status(400).json({
+        success: false,
+        message: message
+      });
+    }
+    
+    console.log(`✅ Actualización masiva completada: ${actualizados} lotes actualizados`);
+    res.json({
+      success: true,
+      message: message,
+      count: actualizados,
+      errores: errores
+    });
+  } catch (err) {
+    console.error('❌ Error en actualización masiva de lotes:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Error en la actualización masiva de lotes',
+        error: err.message
+      });
+    }
+  }
+});
+
+
 // PUT - Actualizar un lote usando stored procedure
 // MODIFICADO: pmlt_idvariedad ahora se trata como el código de la variedad
 router.put('/:id', async (req, res) => {

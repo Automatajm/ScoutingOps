@@ -8,6 +8,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../../models/lote_model.dart';
 import '../../../services/lote_service.dart';
+import '../../models/import_analysis_model.dart';
+import '../../services/import_service.dart';
+import '../../presentation/widgets/import_preview_dialog.dart';
 
 // Excepción personalizada para manejar errores de formato
 class FormatPersonalizadoException implements Exception {
@@ -20,6 +23,7 @@ class FormatPersonalizadoException implements Exception {
 
 class ExcelService {
   final LoteService _loteService = LoteService();
+  final ImportService _importService = ImportService();
 
   // Mapeo de estatus a nombres de estado
   final Map<int, String> _estatusMap = {
@@ -27,263 +31,11 @@ class ExcelService {
     0: 'Inactivo',
   };
 
-  /// ===== MODAL BONITO PARA SOLUCIÓN DE FORMATO =====
-  Future<void> _mostrarModalSolucionFormato(BuildContext context) async {
-    const Color primaryColor = Color(0xFF1E73BB);
-    const Color accentColor = Color(0xFF00A99D);
+  // ========== MÉTODOS DE DIAGNÓSTICO ==========
 
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orange.shade700,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Archivo con Formatos Personalizados',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Container(
-          width: double.maxFinite,
-          constraints: const BoxConstraints(maxHeight: 500),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Descripción del problema
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: Colors.blue.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'El archivo contiene formatos de número personalizados que no son compatibles con la importación web.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF2D3748),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Solución recomendada
-                Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline, color: accentColor, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Solución Recomendada',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                // Pasos numerados
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildPasoSolucion(
-                          1, 'Abrir el archivo en Microsoft Excel'),
-                      _buildPasoSolucion(
-                          2, 'Seleccionar todos los datos (Ctrl+A)'),
-                      _buildPasoSolucion(
-                          3, 'Ir a Inicio → Formato → Formato de celdas'),
-                      _buildPasoSolucion(4,
-                          'En la pestaña "Número", seleccionar "General" o "Texto"'),
-                      _buildPasoSolucion(5, 'Aplicar el formato'),
-                      _buildPasoSolucion(
-                          6, 'Guardar como "Libro de Excel (.xlsx)" nuevo'),
-                      _buildPasoSolucion(
-                          7, 'Intentar importar el nuevo archivo',
-                          isLast: true),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Alternativa rápida
-                Row(
-                  children: [
-                    Icon(Icons.flash_on,
-                        color: Colors.amber.shade600, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Alternativa Rápida',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.content_copy,
-                          color: Colors.amber.shade700, size: 18),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Copiar y pegar los datos en un nuevo archivo Excel en blanco.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF2D3748),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 8),
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 2,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle_outline, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Entendido',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Helper para construir pasos numerados
-  Widget _buildPasoSolucion(int numero, String texto, {bool isLast = false}) {
-    return Container(
-      margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E73BB),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(
-                '$numero',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                texto,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF2D3748),
-                  height: 1.3,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ===== DIAGNÓSTICO INTEGRADO =====
-
-  // Diagnóstico del navegador (llamar en initState)
+  /// Diagnóstico del navegador (llamar en initState)
   static void diagnosticarNavegador() {
     debugPrint("🔍 === DIAGNÓSTICO DEL NAVEGADOR ===");
-
     debugPrint("📱 Plataforma: ${kIsWeb ? 'WEB' : 'NATIVO'}");
 
     if (kIsWeb) {
@@ -293,7 +45,6 @@ class ExcelService {
         debugPrint("📁 FileReader disponible: ${_checkFileReader()}");
         debugPrint("💾 Blob disponible: ${_checkBlob()}");
         debugPrint("🔗 URL.createObjectURL disponible: ${_checkObjectURL()}");
-
         _checkMemoryLimits();
       } catch (e) {
         debugPrint("❌ Error verificando navegador: $e");
@@ -360,21 +111,17 @@ class ExcelService {
         "📏 Tamaño archivo: ${file.size} bytes (${(file.size / (1024 * 1024)).toStringAsFixed(2)} MB)");
     debugPrint("🏷️ Extensión: ${file.extension}");
 
-    // Verificar si el tamaño es problemático
     if (file.size > 50 * 1024 * 1024) {
-      // 50MB
       debugPrint(
           "⚠️ ADVERTENCIA: Archivo muy grande (>50MB) - puede causar problemas en web");
     }
 
-    // Verificar extensión
     if (file.extension?.toLowerCase() != 'xlsx' &&
         file.extension?.toLowerCase() != 'xls') {
       debugPrint("❌ ERROR: Extensión no válida");
       return;
     }
 
-    // Intentar leer los primeros bytes
     try {
       Uint8List? bytes;
 
@@ -384,17 +131,13 @@ class ExcelService {
         if (bytes != null) {
           debugPrint("📊 Primeros 10 bytes: ${bytes.take(10).toList()}");
 
-          // Verificar firmas de archivo Excel
           if (bytes.length >= 4) {
             final signature = bytes.take(4).toList();
             debugPrint("🔐 Firma del archivo: $signature");
 
-            // ZIP signature (Excel moderno .xlsx)
             if (signature[0] == 0x50 && signature[1] == 0x4B) {
               debugPrint("✅ Archivo Excel moderno (.xlsx) detectado");
-            }
-            // OLE signature (Excel antiguo .xls)
-            else if (signature[0] == 0xD0 && signature[1] == 0xCF) {
+            } else if (signature[0] == 0xD0 && signature[1] == 0xCF) {
               debugPrint("✅ Archivo Excel antiguo (.xls) detectado");
             } else {
               debugPrint(
@@ -420,14 +163,11 @@ class ExcelService {
       debugPrint("📊 Iniciando decodificación de ${bytes.length} bytes...");
 
       final stopwatch = Stopwatch()..start();
-
-      // Intentar decodificar paso a paso
       var excelDoc = excel.Excel.decodeBytes(bytes);
-
       stopwatch.stop();
+
       debugPrint(
           "⏱️ Tiempo de decodificación: ${stopwatch.elapsedMilliseconds}ms");
-
       debugPrint("📋 Hojas encontradas: ${excelDoc.sheets.length}");
 
       for (var sheetName in excelDoc.sheets.keys) {
@@ -436,12 +176,10 @@ class ExcelService {
           debugPrint(
               "📄 Hoja '$sheetName': ${sheet.maxRows} filas x ${sheet.maxColumns} columnas");
 
-          // Verificar si la hoja está vacía
           if (sheet.maxRows == 0) {
             debugPrint("⚠️ Hoja '$sheetName' está vacía");
           }
 
-          // Intentar leer la primera celda
           try {
             var firstCell = sheet.cell(
                 excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
@@ -455,7 +193,6 @@ class ExcelService {
       debugPrint("❌ ERROR EN DECODIFICACIÓN: $e");
       debugPrint("📋 Stack trace: ${StackTrace.current}");
 
-      // Intentar diagnóstico más detallado del error
       if (e.toString().contains('custom numFmtId')) {
         debugPrint("🔧 ERROR CONOCIDO: Formato personalizado no soportado");
         debugPrint("💡 SOLUCIÓN: Usar procesamiento alternativo seguro");
@@ -465,7 +202,6 @@ class ExcelService {
             "💡 SOLUCIÓN: Probar con Excel más simple o guardar como .xlsx estándar");
       }
 
-      // Re-lanzar el error para que el flujo normal lo maneje
       rethrow;
     }
   }
@@ -473,7 +209,6 @@ class ExcelService {
   // Diagnóstico de procesamiento
   void _diagnosticarProcesamiento(List<Lote> lotes) {
     debugPrint("🔍 === DIAGNÓSTICO DE PROCESAMIENTO ===");
-
     debugPrint("📊 Lotes procesados: ${lotes.length}");
 
     if (lotes.isEmpty) {
@@ -481,7 +216,6 @@ class ExcelService {
       return;
     }
 
-    // Verificar primer lote
     var primerLote = lotes.first;
     debugPrint("📋 Primer lote procesado:");
     debugPrint("   - Código: ${primerLote.pmlt_codigo}");
@@ -489,7 +223,6 @@ class ExcelService {
     debugPrint("   - Variedad: ${primerLote.pmlt_variedad}");
     debugPrint("   - ID Variedad: ${primerLote.pmlt_idvariedad}");
 
-    // Verificar problemas comunes
     int lotesConProblemas = 0;
     for (var lote in lotes) {
       if (lote.pmlt_codigo == null || lote.pmlt_codigo!.isEmpty) {
@@ -504,7 +237,7 @@ class ExcelService {
     }
   }
 
-  /// ===== MÉTODO 1: Exportar Excel - CON DIAGNÓSTICOS =====
+  /// EXPORTAR EXCEL
   Future<void> exportarExcel(
     BuildContext context,
     List<Lote> sortedLoteData,
@@ -664,7 +397,7 @@ class ExcelService {
     }
   }
 
-  /// ===== MÉTODO 2: Importar Excel - CON DIAGNÓSTICOS =====
+  /// IMPORTAR EXCEL (MÉTODO VIEJO)
   Future<void> importarExcel(
     BuildContext context,
     Map<int, String> variedadesMap,
@@ -685,7 +418,6 @@ class ExcelService {
       if (result != null) {
         debugPrint("📁 Archivo seleccionado exitosamente");
 
-        // DIAGNÓSTICO DEL ARCHIVO
         _diagnosticarArchivo(result);
 
         Uint8List? bytes;
@@ -725,9 +457,9 @@ class ExcelService {
       debugPrint("❌ ERROR EN IMPORTACIÓN: $e");
       debugPrint("📋 Stack trace: ${StackTrace.current}");
 
-      // Verificar si es el error específico de formato personalizado
       if (e is FormatPersonalizadoException) {
-        await _mostrarModalSolucionFormato(context);
+        showMessage(
+            'Error: El archivo contiene formatos personalizados no compatibles');
       } else {
         showMessage('Error al importar Excel: $e');
       }
@@ -737,7 +469,7 @@ class ExcelService {
     }
   }
 
-  /// ===== MÉTODO 3: Procesar Excel - CON DIAGNÓSTICOS ROBUSTOS =====
+  /// PROCESAR EXCEL
   Future<List<Lote>> _procesarExcel(
     Uint8List bytes,
     Map<int, String> variedadesMap,
@@ -748,11 +480,9 @@ class ExcelService {
     try {
       debugPrint("📊 Iniciando procesamiento Excel...");
 
-      // ESTRATEGIA MÚLTIPLE DE PROCESAMIENTO
       excel.Excel? excelDoc;
       bool procesamientoExitoso = false;
 
-      // ESTRATEGIA 1: Procesamiento normal
       try {
         debugPrint("🔄 ESTRATEGIA 1: Procesamiento normal...");
         _diagnosticarDecodificacion(bytes);
@@ -762,18 +492,15 @@ class ExcelService {
       } catch (normalError) {
         debugPrint("❌ ESTRATEGIA 1: Falló - $normalError");
 
-        // ESTRATEGIA 2: Procesamiento con manejo de errores de formato
         if (normalError.toString().contains('custom numFmtId')) {
           debugPrint(
               "🔄 ESTRATEGIA 2: Detectado error de formato personalizado");
           debugPrint(
               "💡 Sugerencia: Convertir archivo a formato Excel estándar");
 
-          // Mostrar modal específico al usuario sobre el problema
           throw FormatPersonalizadoException(
               'El archivo Excel contiene formatos de número personalizados que no son compatibles con la importación web.');
         } else {
-          // Otros tipos de error
           throw Exception('Error al procesar el archivo Excel: $normalError');
         }
       }
@@ -783,7 +510,6 @@ class ExcelService {
             'No se pudo procesar el archivo Excel con ninguna estrategia');
       }
 
-      // PROCESAMIENTO DE DATOS
       if (excelDoc.sheets.isEmpty) {
         debugPrint("❌ El archivo no contiene hojas");
         throw Exception('El archivo no contiene hojas de datos válidas');
@@ -809,7 +535,6 @@ class ExcelService {
             'El archivo no contiene datos. Debe tener al menos una fila de datos además de los encabezados.');
       }
 
-      // LECTURA ROBUSTA DE ENCABEZADOS
       List<String> headers = [];
       for (int col = 0; col < maxCols && col < 50; col++) {
         String cellValue = "";
@@ -821,14 +546,13 @@ class ExcelService {
           }
         } catch (e) {
           debugPrint("⚠️ Error leyendo encabezado columna $col: $e");
-          cellValue = ""; // Continuar con valor vacío
+          cellValue = "";
         }
         headers.add(cellValue);
       }
 
       debugPrint("📋 Encabezados encontrados: $headers");
 
-      // MAPEO FLEXIBLE DE COLUMNAS
       Map<String, int> columnMap = {};
       for (int i = 0; i < headers.length; i++) {
         if (headers[i].isNotEmpty) {
@@ -846,7 +570,6 @@ class ExcelService {
 
       debugPrint("🗺️ Mapeo de columnas: $columnMap");
 
-      // VERIFICACIÓN DE COLUMNAS ESENCIALES
       bool tieneCodigoColumn = columnMap.containsKey('codigo') ||
           columnMap.containsKey('código') ||
           columnMap.keys.any((key) => key.contains('codigo'));
@@ -858,7 +581,6 @@ class ExcelService {
             'El archivo no contiene la columna obligatoria "Código".\n\nColumnas encontradas: ${headers.where((h) => h.isNotEmpty).join(", ")}');
       }
 
-      // ENCONTRAR LA COLUMNA DE CÓDIGO ESPECÍFICA
       String codigoKey = columnMap.keys.firstWhere(
         (key) => key == 'codigo' || key == 'código' || key.contains('codigo'),
         orElse: () => '',
@@ -868,7 +590,6 @@ class ExcelService {
         throw Exception('No se pudo mapear la columna de código');
       }
 
-      // PROCESAMIENTO ROBUSTO DE FILAS
       debugPrint("🔄 Procesando ${maxRows - 1} filas de datos...");
       int filasExitosas = 0;
       int filasConError = 0;
@@ -878,7 +599,6 @@ class ExcelService {
         try {
           Map<String, String> rowData = {};
 
-          // LECTURA SEGURA DE DATOS
           for (var colName in columnMap.keys) {
             int colIndex = columnMap[colName]!;
             String cellValue = "";
@@ -888,7 +608,6 @@ class ExcelService {
                   columnIndex: colIndex, rowIndex: rowIndex));
 
               if (cell.value != null) {
-                // MANEJO SEGURO DE DIFERENTES TIPOS DE VALORES
                 var value = cell.value;
                 if (value is excel.TextCellValue) {
                   cellValue = value.value.toString().trim();
@@ -897,7 +616,6 @@ class ExcelService {
                 } else if (value is excel.DoubleCellValue) {
                   cellValue = value.value.toString().trim();
                 } else if (value is excel.DateCellValue) {
-                  // DateCellValue no tiene getter 'value', usar toString()
                   cellValue = value.toString().trim();
                 } else {
                   cellValue = value.toString().trim();
@@ -906,20 +624,18 @@ class ExcelService {
             } catch (cellError) {
               debugPrint(
                   "⚠️ Error leyendo celda [$rowIndex,$colIndex]: $cellError");
-              cellValue = ""; // Continuar con valor vacío
+              cellValue = "";
             }
 
             rowData[colName] = cellValue;
           }
 
-          // PROCESAMIENTO DE CÓDIGO
           String codigo = rowData[codigoKey] ?? "";
           if (codigo.isEmpty) {
             debugPrint("⚠️ Fila $rowIndex: Código vacío, saltando...");
             continue;
           }
 
-          // PROCESAMIENTO SEGURO DE OTROS CAMPOS
           String canteros = rowData['canteros'] ?? "";
 
           String cantidadStr = rowData['cantidad'] ?? "0";
@@ -936,7 +652,6 @@ class ExcelService {
 
           String variedadStr = rowData['variedad'] ?? "";
 
-          // MAPEO DE VARIEDAD
           if (idVariedad != null && variedadStr.isEmpty) {
             if (variedadesMap.containsKey(idVariedad)) {
               variedadStr = variedadesMap[idVariedad]!;
@@ -960,7 +675,6 @@ class ExcelService {
               rowData['estado'] ?? rowData['estatus'] ?? "Activo";
           int estatus = estadoStr.toLowerCase().contains('activ') ? 1 : 0;
 
-          // CREAR LOTE
           Lote lote = Lote(
             pmlt_codigo: codigo,
             pmlt_canteros: canteros.isNotEmpty ? canteros : null,
@@ -979,14 +693,12 @@ class ExcelService {
           filasExitosas++;
 
           if (rowIndex <= 5) {
-            // Log de las primeras 5 filas para diagnóstico
             debugPrint(
                 "✅ Fila $rowIndex procesada: Código=$codigo, Cantidad=$cantidad, Variedad=$variedadStr");
           }
         } catch (e) {
           filasConError++;
           debugPrint("❌ Error procesando fila $rowIndex: $e");
-          // Continuar con la siguiente fila
         }
       }
 
@@ -1005,13 +717,12 @@ class ExcelService {
       throw Exception('$e');
     }
 
-    // DIAGNÓSTICO DE PROCESAMIENTO
     _diagnosticarProcesamiento(lotes);
 
     return lotes;
   }
 
-  /// ===== MÉTODO 4: Mostrar Diálogo de Confirmación - CON DIAGNÓSTICOS =====
+  /// MOSTRAR DIÁLOGO DE CONFIRMACIÓN
   Future<void> _mostrarDialogoConfirmacion(
     BuildContext context,
     List<Lote> lotes,
@@ -1102,7 +813,7 @@ class ExcelService {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
-              foregroundColor: const Color.fromARGB(255, 250, 250, 250),
+              foregroundColor: Colors.white,
             ),
             child: const Text('Importar'),
           ),
@@ -1111,7 +822,7 @@ class ExcelService {
     );
   }
 
-  /// ===== MÉTODO 5: Confirmar Importación - CON DIAGNÓSTICOS =====
+  /// CONFIRMAR IMPORTACIÓN
   Future<void> _confirmarImportacion(
     List<Lote> lotes,
     Map<int, String> variedadesMap,
@@ -1123,7 +834,6 @@ class ExcelService {
     debugPrint("📊 Procesando ${lotes.length} lotes para importación...");
 
     try {
-      // Procesar variedades antes de enviar
       int lotesConVariedadCorregida = 0;
 
       for (var lote in lotes) {
@@ -1181,5 +891,305 @@ class ExcelService {
       debugPrint("📋 Stack trace: ${StackTrace.current}");
       showMessage('Error al importar lotes: $e');
     }
+  }
+
+  // ========== MÉTODOS NUEVOS PARA IMPORTACIÓN MODERNA ==========
+
+  /// IMPORTAR EXCEL MODERNO (CON ANÁLISIS Y PREVIEW)
+  Future<void> importarExcelModerno(
+    BuildContext context,
+    Map<int, String> variedadesMap,
+    Map<String, int> codigoVariedadesMap,
+    Function() loadData,
+    Function(String message) showMessage,
+    Function(bool isImporting) setImportingState,
+  ) async {
+    debugPrint("🔍 === INICIANDO IMPORTACIÓN MODERNA ===");
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+      );
+
+      if (result == null) {
+        debugPrint("❌ Usuario canceló la selección");
+        return;
+      }
+
+      setImportingState(true);
+      debugPrint("📁 Archivo seleccionado: ${result.files.first.name}");
+
+      Uint8List? bytes;
+      if (kIsWeb) {
+        bytes = result.files.first.bytes;
+      } else {
+        File file = File(result.files.first.path!);
+        bytes = await file.readAsBytes();
+      }
+
+      if (bytes == null) {
+        throw Exception('No se pudo leer el archivo');
+      }
+
+      List<Lote> lotesExcel =
+          await _procesarExcel(bytes, variedadesMap, codigoVariedadesMap);
+
+      if (lotesExcel.isEmpty) {
+        setImportingState(false);
+        showMessage('No se encontraron lotes válidos en el archivo');
+        return;
+      }
+
+      debugPrint("✅ ${lotesExcel.length} lotes procesados del Excel");
+
+      showMessage('Analizando cambios...');
+      final ImportAnalysis analysis =
+          await _importService.analizarImportacion(lotesExcel);
+
+      setImportingState(false);
+
+      debugPrint("📊 Análisis completado:");
+      debugPrint("   - Nuevos: ${analysis.totalNuevos}");
+      debugPrint("   - Actualizar: ${analysis.totalActualizar}");
+      debugPrint("   - Sin cambios: ${analysis.totalSinCambios}");
+
+      if (!context.mounted) return;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => ImportPreviewDialog(
+          analysis: analysis,
+          onConfirm: (lotesCrear, lotesActualizar) async {
+            await _ejecutarImportacion(
+              lotesCrear,
+              lotesActualizar,
+              loadData,
+              showMessage,
+              setImportingState,
+              context,
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint("❌ ERROR: $e");
+      setImportingState(false);
+      showMessage('Error al importar: $e');
+    }
+  }
+
+  /// EJECUTAR IMPORTACIÓN
+  Future<void> _ejecutarImportacion(
+    List<LoteToCreate> lotesCrear,
+    List<LoteToUpdate> lotesActualizar,
+    Function() loadData,
+    Function(String message) showMessage,
+    Function(bool isImporting) setImportingState,
+    BuildContext context,
+  ) async {
+    setImportingState(true);
+
+    try {
+      showMessage('Importando...');
+
+      final resultado = await _importService.ejecutarImportacion(
+        lotesCrear: lotesCrear,
+        lotesActualizar: lotesActualizar,
+      );
+
+      await loadData();
+      setImportingState(false);
+
+      if (!context.mounted) return;
+
+      await _mostrarResultadoImportacion(context, resultado);
+    } catch (e) {
+      debugPrint("❌ ERROR ejecutando importación: $e");
+      setImportingState(false);
+      showMessage('Error: $e');
+    }
+  }
+
+  /// MOSTRAR RESULTADO DE IMPORTACIÓN
+  Future<void> _mostrarResultadoImportacion(
+    BuildContext context,
+    ImportExecutionResult resultado,
+  ) async {
+    const Color primaryColor = Color(0xFF1E73BB);
+    const Color successColor = Color(0xFF219653);
+    const Color errorColor = Color(0xFFE53935);
+
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: resultado.exitoso
+                    ? successColor.withOpacity(0.1)
+                    : errorColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                resultado.exitoso ? Icons.check_circle : Icons.error,
+                color: resultado.exitoso ? successColor : errorColor,
+                size: 32,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Resultado de Importación',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Container(
+          width: double.maxFinite,
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildResultadoRow(Icons.add_circle_outline,
+                          'Lotes creados', resultado.creados, successColor),
+                      const Divider(height: 16),
+                      _buildResultadoRow(Icons.update, 'Lotes actualizados',
+                          resultado.actualizados, successColor),
+                      if (resultado.errores > 0) ...[
+                        const Divider(height: 16),
+                        _buildResultadoRow(Icons.error_outline, 'Errores',
+                            resultado.errores, errorColor),
+                      ],
+                      const Divider(height: 16),
+                      _buildResultadoRow(
+                          Icons.check_circle_outline,
+                          'Total procesados',
+                          resultado.totalProcesados,
+                          primaryColor),
+                    ],
+                  ),
+                ),
+                if (resultado.mensajesError.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: errorColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: errorColor.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.warning_amber,
+                                color: errorColor, size: 20),
+                            const SizedBox(width: 8),
+                            const Text('Errores Encontrados:',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...resultado.mensajesError.take(5).map((mensaje) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text('• $mensaje',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: errorColor.withOpacity(0.8))),
+                          );
+                        }),
+                        if (resultado.mensajesError.length > 5)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '... y ${resultado.mensajesError.length - 5} más',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.grey.shade600),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (resultado.exitoso && resultado.totalProcesados > 0) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: successColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: successColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: successColor, size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text('¡Importación completada exitosamente!',
+                              style: TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Cerrar',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultadoRow(
+      IconData icon, String label, int valor, Color color) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
+        Text(valor.toString(),
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
   }
 }

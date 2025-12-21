@@ -5,6 +5,7 @@ import '../../../models/lote_model.dart';
 import '../../../services/lote_service.dart';
 import '../../../services/excel_service.dart';
 import '../../widgets/pagination_widget.dart';
+//import '../../widgets/searchable_variedad_selector.dart';
 
 // Clase para manejar la información de las columnas
 class ColumnInfo {
@@ -919,7 +920,9 @@ class _LoteManagementScreenState extends State<LoteManagementScreen>
     if (!mounted) return;
 
     try {
-      await _excelService.importarExcel(
+      //await _excelService.importarExcel(
+      //viejo metodo no tomaba en cuenta los cambios recientes
+      await _excelService.importarExcelModerno(
         context,
         _variedadesMap,
         _codigoVariedadesMap,

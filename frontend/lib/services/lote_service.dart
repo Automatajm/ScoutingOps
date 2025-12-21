@@ -657,6 +657,74 @@ class LoteService {
     throw Exception('Error inesperado en importarLotes()');
   }
 
+  /// Actualizar múltiples lotes en una sola petición (BULK UPDATE)
+  Future<ImportResult> actualizarLotesMasivo(List<Lote> lotes) async {
+    int maxRetries = 2;
+    int retryDelay = 1000;
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        debugPrint(
+            "🔄 Actualizando lotes en batch (intento $attempt): ${lotes.length} lotes");
+
+        final response = await http
+            .put(
+              Uri.parse('$lotesUrl/bulk-update'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode({
+                'lotes': lotes.map((lote) => lote.toJson()).toList(),
+              }),
+            )
+            .timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+
+          if (data['success'] == true) {
+            // ✅ BIEN
+            final actualizados = (data['count'] ?? 0) as int;
+            debugPrint(
+                "✅ Actualización masiva exitosa: $actualizados lotes actualizados");
+
+            // Log de errores si existen
+            if (data['errores'] != null) {
+              final errores = data['errores'];
+              if (errores is List && errores.isNotEmpty) {
+                debugPrint("⚠️ Errores encontrados: ${errores.length}");
+                for (var error in errores) {
+                  debugPrint("   ❌ $error");
+                }
+              }
+            }
+
+            // ✅ BIEN
+            return ImportResult(
+              creados: actualizados,
+              actualizados: 0,
+              ignorados: lotes.length - actualizados as int, // ← Cast explícito
+            );
+          } else {
+            throw Exception('Error en la respuesta: ${data['message']}');
+          }
+        } else {
+          final errorData = json.decode(response.body);
+          throw Exception('Error al actualizar lotes: ${errorData['message']}');
+        }
+      } catch (e) {
+        debugPrint("❌ Error en actualización masiva (intento $attempt): $e");
+
+        if (attempt == maxRetries) {
+          throw Exception('Error en actualización masiva: $e');
+        }
+
+        await Future.delayed(Duration(milliseconds: retryDelay));
+        retryDelay *= 2;
+      }
+    }
+
+    throw Exception('Error inesperado en actualizarLotesMasivo()');
+  }
+
   Future<int> importarLotesBatch(List<Lote> lotes) async {
     int maxRetries = 2;
     int retryDelay = 1000;
