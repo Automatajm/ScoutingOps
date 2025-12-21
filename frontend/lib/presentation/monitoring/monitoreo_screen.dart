@@ -37,7 +37,7 @@ class MonitoreoScreen extends StatefulWidget {
 }
 
 class _MonitoreoScreenState extends State<MonitoreoScreen>
-    with 
+    with
         SingleTickerProviderStateMixin,
         CanteroWizardMixin,
         MonitoreoNavigationMixin,
@@ -57,11 +57,13 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   final TextEditingController _responsableController = TextEditingController();
   final TextEditingController _comentariosController = TextEditingController();
   final TextEditingController _cantidadController = TextEditingController();
-  final TextEditingController _cantidadBotadaController = TextEditingController();
+  final TextEditingController _cantidadBotadaController =
+      TextEditingController();
   final TextEditingController _muestra1Controller = TextEditingController();
   final TextEditingController _muestra2Controller = TextEditingController();
   final TextEditingController _muestra3Controller = TextEditingController();
-  final TextEditingController _canterosRangeController = TextEditingController();
+  final TextEditingController _canterosRangeController =
+      TextEditingController();
 
   // Datos dropdowns
   Map<String, dynamic> casasData = {'data': []};
@@ -137,7 +139,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    
+
     // Listener para actualizar UI cuando cambia de tab (para tabs en header)
     // Y para interceptar cambios cuando el wizard está activo
     _tabController.addListener(() {
@@ -148,10 +150,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           _showCloseWizardDialog();
         }
       } else if (mounted) {
-        setState(() {});  // Refrescar para cambiar color activo del tab
+        setState(() {}); // Refrescar para cambiar color activo del tab
       }
     });
-    
+
     _sortColumn = 'ID';
     _sortAscending = false;
 
@@ -235,7 +237,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               _tabController.animateTo(1);
-              _showMessage('Debe finalizar el wizard antes de cambiar de pestaña');
+              _showMessage(
+                  'Debe finalizar el wizard antes de cambiar de pestaña');
             }
           });
           return;
@@ -271,12 +274,13 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             });
           });
         }
-        _cachedIntranetService = Provider.of<IntranetService>(context, listen: false);
-        
+        _cachedIntranetService =
+            Provider.of<IntranetService>(context, listen: false);
+
         // Configurar listeners desde mixins
         setupConnectivityListener();
         updatePendingChangesCount();
-        
+
         _loadCasas();
         _loadVariedades();
         _loadNivelesLimites();
@@ -289,13 +293,14 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _cachedIntranetService = Provider.of<IntranetService>(context, listen: false);
+    _cachedIntranetService =
+        Provider.of<IntranetService>(context, listen: false);
   }
 
   @override
   void dispose() {
     cleanupConnectivityListener(); // Del SyncMixin
-    
+
     _tabController.dispose();
     _searchController.dispose();
     _fechaInicioController.dispose();
@@ -315,14 +320,15 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   }
 
   // ===== MANEJO DE DUPLICADOS =====
-  
+
   /// Método para crear un nuevo monitoreo con validaciones
   void _nuevoMonitoreo() {
     if (isWizardActive || isWizardRangeLocked) {
-      _showMessage('Debe finalizar el wizard antes de crear un nuevo monitoreo');
+      _showMessage(
+          'Debe finalizar el wizard antes de crear un nuevo monitoreo');
       return;
     }
-    
+
     final authService = Provider.of<AuthService>(context, listen: false);
     if (!authService.isAuthenticated) {
       FriendlyErrorDialog.show(
@@ -341,7 +347,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       );
       return;
     }
-    
+
     final userId = authService.getCurrentUserId();
     if (userId == null || userId == 1) {
       FriendlyErrorDialog.show(
@@ -361,10 +367,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       );
       return;
     }
-    
+
     _clearForm();
     if (!mounted) return;
-    
+
     setState(() {
       _isCreatingNew = true;
       _isEditing = true;
@@ -372,7 +378,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       _cantidadController.text = '0';
       _loteContenedorOriginal = 'CONT_GENERAL';
     });
-    
+
     _tabController.animateTo(1);
     _updateEditMode(true);
   }
@@ -382,19 +388,20 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   /// - Si está vacío → Abrir escáner OCR
   Future<void> _scanBarcode() async {
     debugPrint('📷 _scanBarcode iniciado');
-    
+
     // ✅ LÓGICA DUAL: Si ya hay código, buscar directamente
     if (_codigoLoteController.text.isNotEmpty) {
       final String existingCode = _codigoLoteController.text.trim();
-      debugPrint('🔍 Código existente detectado: $existingCode - Buscando directamente...');
-      
+      debugPrint(
+          '🔍 Código existente detectado: $existingCode - Buscando directamente...');
+
       if (mounted) {
         setState(() {
           _isManualEntry = false;
           _errorMessage = '';
           _isLoading = true;
         });
-        
+
         // Buscar información del lote directamente
         await _loadLoteData(existingCode);
       }
@@ -404,17 +411,17 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     // ✅ SI NO HAY CÓDIGO: Abrir escáner OCR (HTML/JavaScript)
     debugPrint('📸 Campo vacío - Abriendo escáner OCR...');
     final String? scannedCode = await BarcodeScanner.scanBarcode(context);
-    
+
     if (scannedCode != null && scannedCode.isNotEmpty && mounted) {
       debugPrint('✅ Código escaneado: $scannedCode');
-      
+
       setState(() {
         _codigoLoteController.text = scannedCode;
         _isManualEntry = false;
         _errorMessage = '';
         _isLoading = true;
       });
-      
+
       // Buscar información del lote escaneado
       await _loadLoteData(scannedCode);
     } else {
@@ -431,10 +438,12 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   Future<void> _loadLoteData(String codigoLote) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
+
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
 
@@ -445,7 +454,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       if (loteInfo != null) {
         final estatus = loteInfo['estatus'] ?? loteInfo['pmlt_estatus'] ?? 1;
         if (estatus != 1) {
-          debugPrint('⚠️ Lote $codigoLote encontrado en lote_info pero inactivo');
+          debugPrint(
+              '⚠️ Lote $codigoLote encontrado en lote_info pero inactivo');
           loteInfo = null;
         } else {
           debugPrint('📦 Lote $codigoLote encontrado en lote_info (SQLite)');
@@ -457,7 +467,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         debugPrint('🔍 Buscando lote $codigoLote en catálogo general...');
         loteInfo = await _buscarLoteEnCatalogo(codigoLote, offlineDbService);
         if (loteInfo != null) {
-          debugPrint('📦 Lote $codigoLote encontrado en catálogo lotes (SQLite)');
+          debugPrint(
+              '📦 Lote $codigoLote encontrado en catálogo lotes (SQLite)');
         }
       }
 
@@ -467,14 +478,16 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         try {
           loteInfo = await monitoreoService.getLoteInfo(codigoLote);
           if (loteInfo != null) {
-            final estatus = loteInfo['estatus'] ?? loteInfo['pmlt_estatus'] ?? 1;
+            final estatus =
+                loteInfo['estatus'] ?? loteInfo['pmlt_estatus'] ?? 1;
             if (estatus != 1) {
               _showMessage('Lote $codigoLote no activo.');
               loteInfo = null;
             } else {
               await offlineDbService.saveLoteInfo(
                   codigoLote, Map<String, dynamic>.from(loteInfo));
-              debugPrint('💾 Lote $codigoLote guardado en lote_info para offline');
+              debugPrint(
+                  '💾 Lote $codigoLote guardado en lote_info para offline');
             }
           }
         } catch (e) {
@@ -492,13 +505,14 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
 
       // ===== 4. ENRIQUECER VARIEDAD DESDE CATÁLOGO =====
       final idVariedad = loteInfo['pmlt_idvariedad'] ?? loteInfo['pmva_id'];
-      final tieneVariedad = (loteInfo['pmlt_variedad'] != null && 
+      final tieneVariedad = (loteInfo['pmlt_variedad'] != null &&
               loteInfo['pmlt_variedad'].toString().isNotEmpty) ||
-          (loteInfo['pmva_descripcion'] != null && 
+          (loteInfo['pmva_descripcion'] != null &&
               loteInfo['pmva_descripcion'].toString().isNotEmpty);
 
       if (idVariedad != null && !tieneVariedad) {
-        debugPrint('🔍 Enriqueciendo variedad desde catálogo (ID: $idVariedad)');
+        debugPrint(
+            '🔍 Enriqueciendo variedad desde catálogo (ID: $idVariedad)');
         final variedadesData = await offlineDbService.getVariedades();
         if (variedadesData != null) {
           try {
@@ -510,20 +524,22 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
               final estatus = v['estatus'] ?? v['pmva_estatus'] ?? 1;
               return estatus == 1;
             });
-            
+
             if (variedad != null) {
-              loteInfo['pmlt_variedad'] = 
+              loteInfo['pmlt_variedad'] =
                   variedad['descripcion'] ?? variedad['pmva_descripcion'];
-              loteInfo['pmva_responsable'] = 
+              loteInfo['pmva_responsable'] =
                   variedad['responsable'] ?? variedad['pmva_responsable'];
               loteInfo['pmlt_idvariedad'] = variedad['codigo']?.toString() ??
                   variedad['pmva_codigo']?.toString() ??
                   loteInfo['pmlt_idvariedad'];
 
-              debugPrint('📦 Variedad enriquecida: ${loteInfo['pmlt_variedad']} → Código: ${loteInfo['pmlt_idvariedad']}');
+              debugPrint(
+                  '📦 Variedad enriquecida: ${loteInfo['pmlt_variedad']} → Código: ${loteInfo['pmlt_idvariedad']}');
             }
           } catch (e) {
-            debugPrint('⚠️ No se encontró variedad con ID $idVariedad en catálogo');
+            debugPrint(
+                '⚠️ No se encontró variedad con ID $idVariedad en catálogo');
           }
         }
       }
@@ -538,8 +554,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
 
       List<String> variedadesActualizadas = List.from(_variedades);
       List<String> casasActualizadas = List.from(_casas);
-      Map<String, String> variedadesIdMapActualizado = Map.from(_variedadesIdMap);
-      Map<String, String> responsablesActualizado = Map.from(_responsablesPorVariedad);
+      Map<String, String> variedadesIdMapActualizado =
+          Map.from(_variedadesIdMap);
+      Map<String, String> responsablesActualizado =
+          Map.from(_responsablesPorVariedad);
 
       // Agregar variedad si no existe
       if (variedadDescripcion != null && variedadDescripcion.isNotEmpty) {
@@ -556,7 +574,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       }
 
       // Agregar casa si no existe
-      if (casaLote != null && casaLote.isNotEmpty && 
+      if (casaLote != null &&
+          casaLote.isNotEmpty &&
           !casasActualizadas.contains(casaLote)) {
         casasActualizadas.insert(1, casaLote);
         debugPrint('➕ Casa agregada a dropdown: $casaLote');
@@ -570,7 +589,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           _casas = casasActualizadas;
           _variedadesIdMap = variedadesIdMapActualizado;
           _responsablesPorVariedad = responsablesActualizado;
-          
+
           // Aplicar valores al formulario
           _selectedVariedad = variedadDescripcion;
           _selectedCasa = casaLote;
@@ -578,11 +597,12 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           _canteroController.text = loteInfo['pmlt_cantero'] ?? '';
           _responsableController.text = responsableLote ?? '';
           _cantidadController.text = '0';
-          
+
           // Guardar valores originales del lote
           _loteCanterosOriginal = loteInfo['pmlt_canteros'];
-          _loteContenedorOriginal = loteInfo['pmlt_contenedor'] ?? 'CONT_GENERAL';
-          
+          _loteContenedorOriginal =
+              loteInfo['pmlt_contenedor'] ?? 'CONT_GENERAL';
+
           _isLoading = false;
         });
 
@@ -593,7 +613,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           initWizard(canterosLote.toString());
           debugPrint('🧙 Wizard iniciado con rango: $canterosLote');
         }
-        
+
         _showMessage('✅ Lote $codigoLote cargado correctamente');
         debugPrint('✅ Lote $codigoLote procesado completamente');
       }
@@ -615,7 +635,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       String codigoLote, OfflineDatabaseService offlineDbService) async {
     try {
       final lotesData = await offlineDbService.getCatalogo('lotes');
-      
+
       if (lotesData == null) {
         debugPrint('⚠️ Catálogo de lotes no disponible en SQLite');
         return null;
@@ -636,7 +656,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         return null;
       }
 
-      debugPrint('🔍 Buscando lote $codigoLote en ${lotesList.length} lotes...');
+      debugPrint(
+          '🔍 Buscando lote $codigoLote en ${lotesList.length} lotes...');
 
       for (var lote in lotesList) {
         if (lote is! Map) continue;
@@ -677,9 +698,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     }
   }
 
-
   // ===== MANEJO DE DUPLICADOS =====
-  
+
   Future<void> _showDuplicateDialog(String message, int? duplicateId) async {
     if (duplicateId == null) return;
 
@@ -689,7 +709,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 56),
-        title: Text('Registro Duplicado', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        title: Text('Registro Duplicado',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -710,7 +731,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
                   Expanded(
                     child: Text(
                       '¿Desea editar el registro existente?',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blue.shade900, fontSize: 13),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade900,
+                          fontSize: 13),
                     ),
                   ),
                 ],
@@ -718,13 +742,17 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             ),
             SizedBox(height: 12),
             Text('ID del registro: $duplicateId',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic)),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancelar', style: TextStyle(color: Colors.grey.shade700)),
+            child:
+                Text('Cancelar', style: TextStyle(color: Colors.grey.shade700)),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
@@ -734,7 +762,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -754,7 +783,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: Icon(Icons.info_outline, color: Colors.blue, size: 56),
-        title: Text('Cerrar Wizard', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        title: Text('Cerrar Wizard',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -778,7 +808,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
                   Expanded(
                     child: Text(
                       'Se guardará el cantero ${wizardCanteroActual}',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange.shade900, fontSize: 13),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade900,
+                          fontSize: 13),
                     ),
                   ),
                 ],
@@ -789,7 +822,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancelar', style: TextStyle(color: Colors.grey.shade700)),
+            child:
+                Text('Cancelar', style: TextStyle(color: Colors.grey.shade700)),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
@@ -799,7 +833,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -819,9 +854,9 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   }
 
   /// Maneja el botón "Finalizar" del wizard
-  /// 
+  ///
   /// IMPORTANTE: Guarda el cantero actual ANTES de cerrar el wizard
-  /// 
+  ///
   /// Flujo:
   /// 1. Valida que el formulario actual esté completo
   /// 2. Si hay errores → Muestra mensaje, NO cierra
@@ -829,64 +864,66 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   /// 4. Luego cierra el wizard y cambia a tab Consulta
   Future<void> _handleWizardFinish() async {
     if (!isWizardActive) return;
-    
+
     debugPrint('🏁 [FINALIZAR] Iniciando finalización de wizard...');
-    
+
     // PASO 1: Validar que el formulario actual esté completo
     // (Solo validar si hay datos en el formulario)
     final hasDataInForm = _canteroController.text.isNotEmpty ||
-                          _selectedPlaga != null ||
-                          _cantidadController.text.isNotEmpty;
-    
+        _selectedPlaga != null ||
+        _cantidadController.text.isNotEmpty;
+
     if (hasDataInForm) {
       debugPrint('📋 [FINALIZAR] Hay datos en formulario, validando...');
-      
+
       // Validar campos requeridos
       if (_codigoLoteController.text.isEmpty) {
         _showMessage('⚠️ Falta código de lote');
         return;
       }
-      
+
       if (_selectedCasa == null || _selectedCasa!.isEmpty) {
         _showMessage('⚠️ Falta seleccionar casa');
         return;
       }
-      
+
       if (_canteroController.text.isEmpty) {
         _showMessage('⚠️ Falta número de cantero');
         return;
       }
-      
+
       if (_selectedPlaga == null || _selectedPlaga!.isEmpty) {
         _showMessage('⚠️ Falta seleccionar plaga');
         return;
       }
-      
+
       if (_cantidadController.text.isEmpty) {
         _showMessage('⚠️ Falta cantidad');
         return;
       }
-      
+
       // PASO 2: Todo OK → Guardar el cantero actual PRIMERO
       debugPrint('✅ [FINALIZAR] Validación OK, guardando cantero actual...');
       await _saveMonitoreo();
-      
+
       // Verificar si el guardado fue exitoso
       if (!_lastSaveSuccess) {
         debugPrint('❌ [FINALIZAR] Error guardando, no se cierra wizard');
-        _showMessage('❌ Error al guardar. Corrija los errores antes de finalizar.');
+        _showMessage(
+            '❌ Error al guardar. Corrija los errores antes de finalizar.');
         return;
       }
-      
+
       debugPrint('✅ [FINALIZAR] Cantero guardado exitosamente');
     } else {
-      debugPrint('ℹ️ [FINALIZAR] No hay datos en formulario actual, solo cerrando wizard');
+      debugPrint(
+          'ℹ️ [FINALIZAR] No hay datos en formulario actual, solo cerrando wizard');
     }
-    
+
     // PASO 3: Cerrar el wizard
     debugPrint('🏁 [FINALIZAR] Cerrando wizard...');
     await wizardFinish();
-    
+
     // PASO 4: Cambiar a tab de Consulta y recargar datos
     if (mounted) {
       _tabController.animateTo(0);
@@ -896,51 +933,53 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   }
 
   /// Helper: Detecta si el formulario de monitoreo está vacío
-  /// 
+  ///
   /// Un formulario se considera vacío cuando NO tiene:
   /// - Plaga seleccionada
   /// - Cantidad ingresada
   /// - Comentarios
   bool _isFormEmpty() {
     final hasPlaga = _selectedPlaga != null && _selectedPlaga!.isNotEmpty;
-    final hasCantidad = _cantidadController.text.isNotEmpty && 
-                        _cantidadController.text != '0';
+    final hasCantidad =
+        _cantidadController.text.isNotEmpty && _cantidadController.text != '0';
     final hasComentarios = _comentariosController.text.isNotEmpty;
-    
+
     // Formulario vacío = no tiene ninguno de los campos importantes
     final isEmpty = !hasPlaga && !hasCantidad && !hasComentarios;
-    
-    debugPrint('📋 [FORM CHECK] isEmpty=$isEmpty (plaga=$hasPlaga, cantidad=$hasCantidad, comentarios=$hasComentarios)');
-    
+
+    debugPrint(
+        '📋 [FORM CHECK] isEmpty=$isEmpty (plaga=$hasPlaga, cantidad=$hasCantidad, comentarios=$hasComentarios)');
+
     return isEmpty;
   }
 
   /// Override de wizardNext del mixin para agregar lógica de guardado en modo parcial/wizard
-  /// 
+  ///
   /// Flujo:
   /// 1. Si formulario VACÍO → Muestra diálogo para confirmar saltar cantero
   /// 2. Si formulario CON DATOS → Muestra diálogo para guardar o continuar sin guardar
   @override
   Future<void> wizardNext() async {
     if (!isWizardActive) return;
-    
+
     debugPrint('➡️ [WIZARD NEXT] Iniciando...');
-    
+
     // Detectar si el formulario está vacío
     final formEmpty = _isFormEmpty();
-    
+
     if (formEmpty) {
       // CASO 1: Formulario vacío
       debugPrint('⚠️ [WIZARD NEXT] Formulario vacío detectado');
-      
+
       final canteroActual = _canteroController.text;
-      
+
       // Mostrar diálogo para confirmar saltar cantero vacío
       final confirmar = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           icon: Icon(Icons.warning_amber, color: Colors.orange, size: 56),
           title: Text(
             '⚠️ Cantero $canteroActual sin datos',
@@ -977,32 +1016,33 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           ],
         ),
       );
-      
+
       if (confirmar != true) {
-        debugPrint('❌ [WIZARD NEXT] Usuario decidió quedarse en cantero actual');
+        debugPrint(
+            '❌ [WIZARD NEXT] Usuario decidió quedarse en cantero actual');
         return; // Usuario decidió quedarse para llenar el formulario
       }
-      
+
       debugPrint('✅ [WIZARD NEXT] Usuario confirmó saltar cantero vacío');
-      
+
       // Limpiar el formulario y avanzar al siguiente cantero
       _clearMonitoreoData();
-      
+
       // Llamar al método original del mixin para avanzar
       await super.wizardNext();
-      
     } else {
       // CASO 2: Formulario con datos
       debugPrint('📝 [WIZARD NEXT] Formulario con datos detectado');
-      
+
       final canteroActual = _canteroController.text;
-      
+
       // Mostrar diálogo para guardar o continuar sin guardar
       final accion = await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           icon: Icon(Icons.save, color: Colors.blue, size: 56),
           title: Text(
             '💾 Guardar cambios',
@@ -1030,7 +1070,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop('no_save'),
-              child: Text('Continuar sin guardar', style: TextStyle(fontSize: 14, color: Colors.orange)),
+              child: Text('Continuar sin guardar',
+                  style: TextStyle(fontSize: 14, color: Colors.orange)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop('save'),
@@ -1038,17 +1079,18 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
               ),
-              child: Text('Guardar y continuar', style: TextStyle(fontSize: 14)),
+              child:
+                  Text('Guardar y continuar', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
       );
-      
+
       if (accion == 'cancel' || accion == null) {
         debugPrint('❌ [WIZARD NEXT] Usuario canceló');
         return;
       }
-      
+
       if (accion == 'no_save') {
         debugPrint('⚠️ [WIZARD NEXT] Usuario decidió continuar sin guardar');
         // Limpiar el formulario y avanzar sin guardar
@@ -1056,42 +1098,44 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         await super.wizardNext();
         return;
       }
-      
+
       if (accion == 'save') {
-        debugPrint('💾 [WIZARD NEXT] Usuario decidió guardar antes de continuar');
-        
+        debugPrint(
+            '💾 [WIZARD NEXT] Usuario decidió guardar antes de continuar');
+
         // Guardar usando el método de guardado parcial (modo wizard)
         await _saveMonitoreoParcial();
-        
+
         // Verificar si el guardado fue exitoso
         if (!_lastSaveSuccess) {
           debugPrint('❌ [WIZARD NEXT] Error guardando, no se avanza');
-          _showMessage('❌ Error al guardar. Corrija los errores antes de continuar.');
+          _showMessage(
+              '❌ Error al guardar. Corrija los errores antes de continuar.');
           return;
         }
-        
+
         debugPrint('✅ [WIZARD NEXT] Guardado exitoso, preparando avance...');
-        
+
         // Limpiar completamente el estado ANTES de avanzar
         // Esto es CRÍTICO para que super.wizardNext() no vuelva a mostrar diálogo
         _clearMonitoreoData();
-        
+
         // IMPORTANTE: Limpiar estado de modo parcial
         setState(() {
           isInPartialSaveMode = false;
           plagasRegistradasParcial.clear();
           variedadesUsadasParcial.clear();
         });
-        
+
         debugPrint('🧹 [WIZARD NEXT] Estado limpiado completamente');
-        
+
         // Pequeño delay para asegurar que setState se aplique
         await Future.delayed(Duration(milliseconds: 10));
-        
+
         // Ahora avanzar - super.wizardNext() no debería mostrar diálogo porque estado está limpio
         debugPrint('➡️ [WIZARD NEXT] Llamando a super.wizardNext()...');
         await super.wizardNext();
-        
+
         debugPrint('✅ [WIZARD NEXT] Avance completado');
       }
     }
@@ -1101,12 +1145,13 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     try {
       setState(() => _isLoading = true);
 
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
       final monitoreo = await monitoreoService.getMonitoreoById(monitoreoId);
-      
+
       if (monitoreo != null && mounted) {
         _editMonitoreo(monitoreo);
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -1114,15 +1159,18 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
                 Icon(Icons.edit, color: Colors.white, size: 20),
                 SizedBox(width: 12),
                 Expanded(
-                  child: Text('Editando registro existente (ID: $monitoreoId)', style: TextStyle(fontSize: 14)),
+                  child: Text('Editando registro existente (ID: $monitoreoId)',
+                      style: TextStyle(fontSize: 14)),
                 ),
               ],
             ),
             backgroundColor: Colors.blue,
             duration: Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            action: SnackBarAction(label: 'OK', textColor: Colors.white, onPressed: () {}),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            action: SnackBarAction(
+                label: 'OK', textColor: Colors.white, onPressed: () {}),
           ),
         );
       }
@@ -1154,19 +1202,20 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       _selectedCasa = monitoreo.pmmo_casa;
       _casaController.text = monitoreo.pmmo_casa ?? '';
       _canteroController.text = monitoreo.pmmo_cantero ?? '';
-      
+
       _selectedVariedad = monitoreo.pmmo_variedad ?? monitoreo.pmva_descripcion;
       _selectedPlaga = monitoreo.pmni_nombrecomun;
-      
+
       _responsableController.text = monitoreo.pmmo_grower ?? '';
       _comentariosController.text = monitoreo.pmmo_comentarios ?? '';
       _cantidadController.text = monitoreo.pmmo_cantidad?.toString() ?? '0';
-      _cantidadBotadaController.text = monitoreo.pmmo_cant_botada?.toString() ?? '';
-      
+      _cantidadBotadaController.text =
+          monitoreo.pmmo_cant_botada?.toString() ?? '';
+
       _muestra1Controller.text = monitoreo.pmmo_muestra1?.toString() ?? '';
       _muestra2Controller.text = monitoreo.pmmo_muestra2?.toString() ?? '';
       _muestra3Controller.text = monitoreo.pmmo_muestra3?.toString() ?? '';
-      
+
       _selectedNivelMuestra1 = monitoreo.pmmo_nivmuestram1?.toString();
       _selectedNivelMuestra2 = monitoreo.pmmo_nivmuestram2?.toString();
       _selectedNivelMuestra3 = monitoreo.pmmo_nivmuestram3?.toString();
@@ -1215,12 +1264,15 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              final authService = Provider.of<AuthService>(context, listen: false);
+              final authService =
+                  Provider.of<AuthService>(context, listen: false);
               authService.logout();
-              Navigator.of(context).pushNamedAndRemoveUntil(RoutesManager.login, (route) => false);
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                  RoutesManager.login, (route) => false);
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white),
             child: const Text('Cerrar sesión'),
           ),
         ],
@@ -1231,13 +1283,14 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   Future<void> _mostrarInfoApp() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      
+
       if (!mounted) return;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               Icon(Icons.info_outline, color: Colors.indigo, size: 28),
@@ -1253,7 +1306,11 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
               _buildInfoRow('Versión', '${packageInfo.version}'),
               _buildInfoRow('Build', packageInfo.buildNumber),
               Divider(height: 20),
-              _buildInfoRow('Estado', _cachedIntranetService?.isConnected.value == true ? '🟢 Conectado' : '🔴 Offline'),
+              _buildInfoRow(
+                  'Estado',
+                  _cachedIntranetService?.isConnected.value == true
+                      ? '🟢 Conectado'
+                      : '🔴 Offline'),
             ],
           ),
           actions: [
@@ -1293,7 +1350,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     setState(() {
       _sortColumn = column;
       _sortAscending = ascending;
-      final columnDef = _columns.firstWhere((col) => col['title'] == column, orElse: () => {});
+      final columnDef = _columns.firstWhere((col) => col['title'] == column,
+          orElse: () => {});
       if (columnDef.containsKey('valueExtractor')) {
         final valueExtractor = columnDef['valueExtractor'] as Function;
         final isNumeric = columnDef['isNumeric'] == true;
@@ -1305,7 +1363,9 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             final bNum = int.tryParse(bValue) ?? 0;
             return ascending ? aNum.compareTo(bNum) : bNum.compareTo(aNum);
           }
-          return ascending ? aValue.compareTo(bValue) : bValue.compareTo(aValue);
+          return ascending
+              ? aValue.compareTo(bValue)
+              : bValue.compareTo(aValue);
         });
       }
     });
@@ -1329,9 +1389,12 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     if (!mounted) return;
     try {
       setState(() => _isLoading = true);
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final dataToExport = onlyFiltered ? _filteredMonitoreoData : _monitoreoData;
-      final success = await monitoreoService.exportarMonitoreosExcel(dataToExport, fileName, _columns);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final dataToExport =
+          onlyFiltered ? _filteredMonitoreoData : _monitoreoData;
+      final success = await monitoreoService.exportarMonitoreosExcel(
+          dataToExport, fileName, _columns);
       if (mounted) {
         setState(() => _isLoading = false);
         _showMessage(success ? 'Exportado correctamente' : 'Error al exportar');
@@ -1358,10 +1421,12 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     _totalItems = _monitoreoData.length;
     _totalPages = (_totalItems / _itemsPerPage).ceil();
     if (_totalPages == 0) _totalPages = 1;
-    if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
-    
+    if (_currentPage > _totalPages && _totalPages > 0)
+      _currentPage = _totalPages;
+
     if (_sortColumn != null) {
-      final columnDef = _columns.firstWhere((col) => col['title'] == _sortColumn, orElse: () => {});
+      final columnDef = _columns
+          .firstWhere((col) => col['title'] == _sortColumn, orElse: () => {});
       if (columnDef.containsKey('valueExtractor')) {
         final valueExtractor = columnDef['valueExtractor'] as Function;
         final isNumeric = columnDef['isNumeric'] == true;
@@ -1373,18 +1438,20 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             final bNum = int.tryParse(bValue) ?? 0;
             return _sortAscending ? aNum.compareTo(bNum) : bNum.compareTo(aNum);
           }
-          return _sortAscending ? aValue.compareTo(bValue) : bValue.compareTo(aValue);
+          return _sortAscending
+              ? aValue.compareTo(bValue)
+              : bValue.compareTo(aValue);
         });
       }
     }
-    
+
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     int endIndex = startIndex + _itemsPerPage;
     if (endIndex > _totalItems) endIndex = _totalItems;
-    
+
     if (_monitoreoData.isNotEmpty && startIndex < _monitoreoData.length) {
-      _filteredMonitoreoData = _monitoreoData.sublist(
-          startIndex, endIndex < _monitoreoData.length ? endIndex : _monitoreoData.length);
+      _filteredMonitoreoData = _monitoreoData.sublist(startIndex,
+          endIndex < _monitoreoData.length ? endIndex : _monitoreoData.length);
     } else {
       _filteredMonitoreoData = [];
     }
@@ -1405,8 +1472,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         try {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(message), duration: const Duration(seconds: 2)));
         } catch (e) {
           debugPrint('Error: $e');
         }
@@ -1416,7 +1483,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
 
   Future<void> _loadInfoPlagaAction(String nombrePlaga) async {
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
       final nivelesData = await monitoreoService.getNivelesPlaga(nombrePlaga);
       if (mounted && nivelesData.isNotEmpty) {
         setState(() {
@@ -1448,16 +1516,22 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       }
     }
     List<String> resultado = canteros.toList();
-    resultado.sort((a, b) => a == 'Todos' ? -1 : b == 'Todos' ? 1 : a.compareTo(b));
+    resultado.sort((a, b) => a == 'Todos'
+        ? -1
+        : b == 'Todos'
+            ? 1
+            : a.compareTo(b));
     return resultado;
   }
 
   // ===== CARGA DE DATOS AUXILIARES =====
-  
+
   Future<void> _loadVariedades() async {
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
 
@@ -1469,23 +1543,29 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       if (variedadesList != null && variedadesList.isNotEmpty) {
         if (variedadesList[0] is Map) {
           final primerVariedad = variedadesList[0] as Map;
-          tieneDatosValidos = primerVariedad.containsKey('codigo') || primerVariedad.containsKey('pmva_codigo');
-          
+          tieneDatosValidos = primerVariedad.containsKey('codigo') ||
+              primerVariedad.containsKey('pmva_codigo');
+
           if (!tieneDatosValidos) {
-            debugPrint('⚠️ Datos en SQLite sin campo código - Forzando re-descarga...');
+            debugPrint(
+                '⚠️ Datos en SQLite sin campo código - Forzando re-descarga...');
             variedadesList = null;
           }
         }
       }
 
-      if ((variedadesList == null || !tieneDatosValidos) && intranetService.isConnected.value) {
+      if ((variedadesList == null || !tieneDatosValidos) &&
+          intranetService.isConnected.value) {
         debugPrint('🌐 Descargando variedades actualizadas de API...');
         try {
-          final variedadesData = await monitoreoService.getDatosAuxiliares('variedades');
-          if (variedadesData['data'] != null && variedadesData['data'] is List) {
+          final variedadesData =
+              await monitoreoService.getDatosAuxiliares('variedades');
+          if (variedadesData['data'] != null &&
+              variedadesData['data'] is List) {
             variedadesList = variedadesData['data'];
             await offlineDbService.saveVariedades(variedadesList!);
-            debugPrint('💾 Variedades guardadas en SQLite: ${variedadesList.length}');
+            debugPrint(
+                '💾 Variedades guardadas en SQLite: ${variedadesList.length}');
           }
         } catch (e) {
           debugPrint('⚠️ Error descargando variedades de API: $e');
@@ -1495,37 +1575,42 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       if (mounted && variedadesList != null && variedadesList.isNotEmpty) {
         Map<String, String> nuevoMapa = {};
         Map<String, String> nuevoMapaIds = {};
-        
+
         setState(() {
           _variedades = ['Variedad genérica'];
-          
+
           for (var variedad in variedadesList!) {
             if (variedad is Map) {
-              final estatus = variedad['estatus'] ?? variedad['pmva_estatus'] ?? 1;
+              final estatus =
+                  variedad['estatus'] ?? variedad['pmva_estatus'] ?? 1;
               if (estatus != 1) continue;
-              
-              String? descripcion = variedad['descripcion']?.toString() ?? variedad['pmva_descripcion']?.toString();
-              String? responsable = variedad['responsable']?.toString() ?? variedad['pmva_responsable']?.toString();
-              var codigo = variedad['codigo']?.toString() ?? variedad['pmva_codigo']?.toString();
-              
+
+              String? descripcion = variedad['descripcion']?.toString() ??
+                  variedad['pmva_descripcion']?.toString();
+              String? responsable = variedad['responsable']?.toString() ??
+                  variedad['pmva_responsable']?.toString();
+              var codigo = variedad['codigo']?.toString() ??
+                  variedad['pmva_codigo']?.toString();
+
               if (codigo == null || codigo.isEmpty) {
                 debugPrint('⚠️ Variedad sin código: $descripcion');
                 continue;
               }
-              
+
               if (descripcion != null && descripcion.isNotEmpty) {
-                if (!_variedades.contains(descripcion)) _variedades.add(descripcion);
+                if (!_variedades.contains(descripcion))
+                  _variedades.add(descripcion);
                 if (responsable != null) nuevoMapa[descripcion] = responsable;
                 nuevoMapaIds[descripcion] = codigo;
                 debugPrint('✅ Variedad: $descripcion → Código: $codigo');
               }
             }
           }
-          
+
           _responsablesPorVariedad = nuevoMapa;
           _variedadesIdMap = nuevoMapaIds;
         });
-        
+
         debugPrint('✅ Variedades procesadas: ${_variedades.length}');
       } else {
         if (mounted) setState(() => _variedades = ['Variedad genérica']);
@@ -1539,8 +1624,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
 
   Future<void> _loadCasas() async {
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
 
@@ -1548,7 +1635,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       casasList = await offlineDbService.getCasas();
       debugPrint('📦 Casas en SQLite: ${casasList?.length ?? 0}');
 
-      if ((casasList == null || casasList.isEmpty) && intranetService.isConnected.value) {
+      if ((casasList == null || casasList.isEmpty) &&
+          intranetService.isConnected.value) {
         debugPrint('🌐 SQLite vacío, descargando casas de API...');
         try {
           final response = await monitoreoService.getDatosAuxiliares('casas');
@@ -1571,11 +1659,14 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
             if (casa is Map) {
               final estatus = casa['estatus'] ?? casa['pmun_estatus'] ?? 1;
               if (estatus != 1) continue;
-              codigo = casa['codigo']?.toString() ?? casa['pmun_codigo']?.toString() ?? casa['pmun_descripcion']?.toString();
+              codigo = casa['codigo']?.toString() ??
+                  casa['pmun_codigo']?.toString() ??
+                  casa['pmun_descripcion']?.toString();
             } else if (casa is String) {
               codigo = casa;
             }
-            if (codigo != null && codigo.isNotEmpty && !_casas.contains(codigo)) _casas.add(codigo);
+            if (codigo != null && codigo.isNotEmpty && !_casas.contains(codigo))
+              _casas.add(codigo);
           }
         });
         debugPrint('✅ Casas procesadas: ${_casas.length}');
@@ -1592,8 +1683,10 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   Future<void> _loadPlagas() async {
     try {
       setState(() => _isLoading = true);
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
 
@@ -1611,7 +1704,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           plagasNombres = await monitoreoService.getPlagasActivasNombres();
           if (plagasNombres.isNotEmpty) {
             await offlineDbService.savePlagas(plagasNombres);
-            debugPrint('💾 Plagas guardadas en SQLite: ${plagasNombres.length}');
+            debugPrint(
+                '💾 Plagas guardadas en SQLite: ${plagasNombres.length}');
           }
         } catch (e) {
           debugPrint('⚠️ Error descargando plagas de API: $e');
@@ -1621,23 +1715,27 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _plagas = plagasNombres.isNotEmpty ? plagasNombres : ['Plaga genérica'];
+          _plagas =
+              plagasNombres.isNotEmpty ? plagasNombres : ['Plaga genérica'];
         });
         debugPrint('✅ Plagas procesadas: ${_plagas.length}');
       }
     } catch (e) {
       debugPrint('❌ Error en _loadPlagas: $e');
-      if (mounted) setState(() {
-        _isLoading = false;
-        _plagas = ['Plaga genérica'];
-      });
+      if (mounted)
+        setState(() {
+          _isLoading = false;
+          _plagas = ['Plaga genérica'];
+        });
     }
   }
 
   Future<void> _loadNivelesLimites() async {
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
 
@@ -1665,13 +1763,15 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
           _limiteNivel2 = nivelesData!['lmsupniv2'] ?? 20;
           _limiteNivel3 = nivelesData!['lmsupniv3'] ?? 30;
         });
-        debugPrint('✅ Niveles procesados: $_limiteNivel1/$_limiteNivel2/$_limiteNivel3');
+        debugPrint(
+            '✅ Niveles procesados: $_limiteNivel1/$_limiteNivel2/$_limiteNivel3');
       } else {
-        if (mounted) setState(() {
-          _limiteNivel1 = 10;
-          _limiteNivel2 = 20;
-          _limiteNivel3 = 30;
-        });
+        if (mounted)
+          setState(() {
+            _limiteNivel1 = 10;
+            _limiteNivel2 = 20;
+            _limiteNivel3 = 30;
+          });
         debugPrint('⚠️ Usando niveles por defecto');
       }
     } catch (e) {
@@ -1681,7 +1781,8 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
 
   void _updateEditMode(bool isEditing) {
     if (widget.onEditModeChanged != null && mounted) {
-      if (WidgetsBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks) {
+      if (WidgetsBinding.instance.schedulerPhase !=
+          SchedulerPhase.persistentCallbacks) {
         try {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onEditModeChanged!(isEditing);
@@ -1696,16 +1797,17 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   // ===== MÉTODO OPTIMIZADO: AGREGAR MONITOREO SIN RECARGAR TODO =====
   void _addMonitoreoToList(Monitoreo monitoreo) {
     if (!mounted) return;
-    
+
     setState(() {
       // Agregar al inicio de la lista (más reciente primero)
       _monitoreoData.insert(0, monitoreo);
-      
+
       // Re-aplicar paginación para mostrar el nuevo registro
       _applyPagination();
     });
-    
-    debugPrint('✅ Monitoreo ${monitoreo.pmmo_secuencia} agregado a la lista (sin recargar)');
+
+    debugPrint(
+        '✅ Monitoreo ${monitoreo.pmmo_secuencia} agregado a la lista (sin recargar)');
   }
 
   Future<void> _loadData() async {
@@ -1714,37 +1816,48 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       _isLoading = true;
       _errorMessage = '';
     });
-    
+
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
       final cacheService = Provider.of<CacheService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
       if (intranetService == null) return;
       final authService = Provider.of<AuthService>(context, listen: false);
-      
+
       List<Monitoreo> monitoreos = [];
 
       if (intranetService.isConnected.value) {
         try {
           monitoreos = await monitoreoService.getMonitoreos();
           for (final m in monitoreos) {
-            await offlineDbService.saveMonitoreoFromMap(m.toJson(), isLocal: false);
+            await offlineDbService.saveMonitoreoFromMap(m.toJson(),
+                isLocal: false);
           }
           debugPrint('💾 ${monitoreos.length} monitoreos guardados en SQLite');
-          await cacheService.saveData('monitoreos_data', monitoreos.map((m) => m.toJson()).toList());
-          await cacheService.saveData('last_online_sync', DateTime.now().toIso8601String());
+          await cacheService.saveData(
+              'monitoreos_data', monitoreos.map((m) => m.toJson()).toList());
+          await cacheService.saveData(
+              'last_online_sync', DateTime.now().toIso8601String());
         } catch (e) {
           debugPrint('⚠️ Error cargando de API, intentando SQLite: $e');
           final sqliteData = await offlineDbService.getAllMonitoreos();
           if (sqliteData.isNotEmpty) {
-            monitoreos = sqliteData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
-            debugPrint('📦 ${monitoreos.length} monitoreos cargados desde SQLite (fallback)');
+            monitoreos = sqliteData
+                .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+                .toList();
+            debugPrint(
+                '📦 ${monitoreos.length} monitoreos cargados desde SQLite (fallback)');
           } else {
             final cachedData = await cacheService.loadData('monitoreos_data');
             if (cachedData != null && cachedData is List) {
-              monitoreos = cachedData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
-              debugPrint('📦 ${monitoreos.length} monitoreos cargados desde cache (fallback)');
+              monitoreos = cachedData
+                  .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+                  .toList();
+              debugPrint(
+                  '📦 ${monitoreos.length} monitoreos cargados desde cache (fallback)');
             }
           }
         }
@@ -1752,23 +1865,31 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         debugPrint('📴 Modo OFFLINE - Cargando desde SQLite...');
         final sqliteData = await offlineDbService.getAllMonitoreos();
         if (sqliteData.isNotEmpty) {
-          monitoreos = sqliteData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
-          debugPrint('📦 ${monitoreos.length} monitoreos cargados desde SQLite');
+          monitoreos = sqliteData
+              .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+              .toList();
+          debugPrint(
+              '📦 ${monitoreos.length} monitoreos cargados desde SQLite');
         } else {
           final cachedData = await cacheService.loadData('monitoreos_data');
           if (cachedData != null && cachedData is List) {
-            monitoreos = cachedData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
-            debugPrint('📦 ${monitoreos.length} monitoreos cargados desde cache (fallback)');
+            monitoreos = cachedData
+                .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+                .toList();
+            debugPrint(
+                '📦 ${monitoreos.length} monitoreos cargados desde cache (fallback)');
           }
         }
         _showMessage('Modo offline - ${monitoreos.length} registros locales');
       }
 
-      if (authService.mustFilterByUser && authService.getCurrentUserId() != null) {
+      if (authService.mustFilterByUser &&
+          authService.getCurrentUserId() != null) {
         final userId = authService.getCurrentUserId();
-        monitoreos = monitoreos.where((m) => m.pmmo_creadopor == userId).toList();
+        monitoreos =
+            monitoreos.where((m) => m.pmmo_creadopor == userId).toList();
       }
-      
+
       if (mounted) {
         setState(() {
           _monitoreoData = monitoreos;
@@ -1788,310 +1909,367 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
     }
   }
 
-/// Busca monitoreos aplicando los filtros activos
-/// Diferente a _loadData() que carga todo sin filtros
-Future<void> _searchMonitoreos() async {
-  if (!mounted) return;
-  
-  setState(() {
-    _isLoading = true;
-    _errorMessage = '';
-  });
-  
-  try {
-    final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-    final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
-    final intranetService = _cachedIntranetService;
-    if (intranetService == null) return;
-    final authService = Provider.of<AuthService>(context, listen: false);
-    
-    List<Monitoreo> monitoreos = [];
-    
-    // ===== LOG DE FILTROS APLICADOS =====
-    debugPrint('🔍 BÚSQUEDA CON FILTROS:');
-    debugPrint('  - Lote: ${_searchController.text.isEmpty ? "Todos" : _searchController.text}');
-    debugPrint('  - Plaga: ${_selectedPlaga ?? "Todas"}');
-    debugPrint('  - Casa: ${_selectedCasaFiltro ?? "Todas"}');
-    debugPrint('  - Cantero: ${_selectedCanteroFiltro ?? "Todos"}');
-    debugPrint('  - Variedad: ${_selectedVariedadFiltro ?? "Todas"}');
-    debugPrint('  - Fecha Inicio: ${_fechaInicio?.toString() ?? "Sin filtro"}');
-    debugPrint('  - Fecha Fin: ${_fechaFin?.toString() ?? "Sin filtro"}');
-    debugPrint('  - Estatus: ${_selectedEstado ?? "Todos"}');
-    
-    if (intranetService.isConnected.value) {
-      // ===== MODO ONLINE: Búsqueda con filtros en servidor =====
-      try {
-        monitoreos = await monitoreoService.getMonitoreos(
-          lote: _searchController.text.isNotEmpty ? _searchController.text : null,
-          plaga: (_selectedPlaga != null && _selectedPlaga != 'Todas') ? _selectedPlaga : null,
-          casa: (_selectedCasaFiltro != null && _selectedCasaFiltro != 'Todas') ? _selectedCasaFiltro : null,
-          cantero: (_selectedCanteroFiltro != null && _selectedCanteroFiltro != 'Todos') ? _selectedCanteroFiltro : null,
-          variedad: (_selectedVariedadFiltro != null && _selectedVariedadFiltro != 'Todas') ? _selectedVariedadFiltro : null,
-          fechaInicio: _fechaInicio,
-          fechaFin: _fechaFin,
-          estatus: _selectedEstado != null 
-            ? (_selectedEstado == 'Activo' ? 1 : 0) 
-            : null,
-        );
-        
-        debugPrint('📊 RESULTADOS DEL SERVIDOR: ${monitoreos.length} monitoreos');
-        
-      } catch (e) {
-        debugPrint('⚠️ Error en búsqueda online, intentando offline: $e');
-        
-        // Fallback: Buscar en SQLite offline
+  /// Busca monitoreos aplicando los filtros activos
+  /// Diferente a _loadData() que carga todo sin filtros
+  Future<void> _searchMonitoreos() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
+      final intranetService = _cachedIntranetService;
+      if (intranetService == null) return;
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      List<Monitoreo> monitoreos = [];
+
+      // ===== LOG DE FILTROS APLICADOS =====
+      debugPrint('🔍 BÚSQUEDA CON FILTROS:');
+      debugPrint(
+          '  - Lote: ${_searchController.text.isEmpty ? "Todos" : _searchController.text}');
+      debugPrint('  - Plaga: ${_selectedPlaga ?? "Todas"}');
+      debugPrint('  - Casa: ${_selectedCasaFiltro ?? "Todas"}');
+      debugPrint('  - Cantero: ${_selectedCanteroFiltro ?? "Todos"}');
+      debugPrint('  - Variedad: ${_selectedVariedadFiltro ?? "Todas"}');
+      debugPrint(
+          '  - Fecha Inicio: ${_fechaInicio?.toString() ?? "Sin filtro"}');
+      debugPrint('  - Fecha Fin: ${_fechaFin?.toString() ?? "Sin filtro"}');
+      debugPrint('  - Estatus: ${_selectedEstado ?? "Todos"}');
+
+      if (intranetService.isConnected.value) {
+        // ===== MODO ONLINE: Búsqueda con filtros en servidor =====
+        try {
+          monitoreos = await monitoreoService.getMonitoreos(
+            lote: _searchController.text.isNotEmpty
+                ? _searchController.text
+                : null,
+            plaga: (_selectedPlaga != null && _selectedPlaga != 'Todas')
+                ? _selectedPlaga
+                : null,
+            casa:
+                (_selectedCasaFiltro != null && _selectedCasaFiltro != 'Todas')
+                    ? _selectedCasaFiltro
+                    : null,
+            cantero: (_selectedCanteroFiltro != null &&
+                    _selectedCanteroFiltro != 'Todos')
+                ? _selectedCanteroFiltro
+                : null,
+            variedad: (_selectedVariedadFiltro != null &&
+                    _selectedVariedadFiltro != 'Todas')
+                ? _selectedVariedadFiltro
+                : null,
+            fechaInicio: _fechaInicio,
+            fechaFin: _fechaFin,
+            estatus: _selectedEstado != null
+                ? (_selectedEstado == 'Activo' ? 1 : 0)
+                : null,
+          );
+
+          debugPrint(
+              '📊 RESULTADOS DEL SERVIDOR: ${monitoreos.length} monitoreos');
+        } catch (e) {
+          debugPrint('⚠️ Error en búsqueda online, intentando offline: $e');
+
+          // Fallback: Buscar en SQLite offline
+          final sqliteData = await offlineDbService.getAllMonitoreos();
+          if (sqliteData.isNotEmpty) {
+            monitoreos = sqliteData
+                .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+                .toList();
+            monitoreos = _applyLocalFilters(monitoreos);
+            debugPrint('📦 Búsqueda offline: ${monitoreos.length} resultados');
+          }
+        }
+      } else {
+        // ===== MODO OFFLINE: Búsqueda local =====
+        debugPrint('📴 MODO OFFLINE - Aplicando filtros localmente');
+
         final sqliteData = await offlineDbService.getAllMonitoreos();
         if (sqliteData.isNotEmpty) {
-          monitoreos = sqliteData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
+          monitoreos = sqliteData
+              .map<Monitoreo>((json) => Monitoreo.fromJson(json))
+              .toList();
           monitoreos = _applyLocalFilters(monitoreos);
           debugPrint('📦 Búsqueda offline: ${monitoreos.length} resultados');
+        } else {
+          debugPrint('⚠️ Sin datos locales para buscar');
         }
-      }
-    } else {
-      // ===== MODO OFFLINE: Búsqueda local =====
-      debugPrint('📴 MODO OFFLINE - Aplicando filtros localmente');
-      
-      final sqliteData = await offlineDbService.getAllMonitoreos();
-      if (sqliteData.isNotEmpty) {
-        monitoreos = sqliteData.map<Monitoreo>((json) => Monitoreo.fromJson(json)).toList();
-        monitoreos = _applyLocalFilters(monitoreos);
-        debugPrint('📦 Búsqueda offline: ${monitoreos.length} resultados');
-      } else {
-        debugPrint('⚠️ Sin datos locales para buscar');
-      }
-      
-      _showMessage('Modo offline - Búsqueda local: ${monitoreos.length} resultados');
-    }
-    
-    // ===== FILTRO POR USUARIO (si aplica) =====
-    if (authService.mustFilterByUser && authService.getCurrentUserId() != null) {
-      final userId = authService.getCurrentUserId();
-      final originalCount = monitoreos.length;
-      monitoreos = monitoreos.where((m) => m.pmmo_creadopor == userId).toList();
-      debugPrint('👤 Filtro por usuario: ${originalCount} → ${monitoreos.length}');
-    }
-    
-    // ===== ACTUALIZAR UI =====
-    if (mounted) {
-      setState(() {
-        _monitoreoData = monitoreos;
-        _currentPage = 1;
-        _applyPagination();
-        _isLoading = false;
-      });
-      
-      debugPrint('✅ BÚSQUEDA COMPLETADA: ${monitoreos.length} monitoreos mostrados');
-    }
-    
-  } catch (e) {
-    debugPrint('❌ ERROR EN BÚSQUEDA: $e');
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Error en búsqueda: $e';
-      });
-      _showMessage('Error en búsqueda: $e');
-    }
-  }
-}
 
-/// Muestra un selector de rango de fechas y actualiza los filtros
-Future<void> _selectDateRange(BuildContext context) async {
-  // Rango inicial: Si ya hay fechas seleccionadas, usarlas; sino usar últimos 7 días
-  final DateTime now = DateTime.now();
-  final DateTime firstDate = DateTime(2020, 1, 1); // Fecha más antigua permitida
-  final DateTime lastDate = now.add(Duration(days: 365)); // Hasta 1 año en el futuro
-  
-  // Rango inicial
-  DateTimeRange? initialRange;
-  if (_fechaInicio != null && _fechaFin != null) {
-    initialRange = DateTimeRange(start: _fechaInicio!, end: _fechaFin!);
-  } else {
-    // Por defecto: últimos 7 días
-    initialRange = DateTimeRange(
-      start: now.subtract(Duration(days: 7)),
-      end: now,
-    );
+        _showMessage(
+            'Modo offline - Búsqueda local: ${monitoreos.length} resultados');
+      }
+
+      // ===== FILTRO POR USUARIO (si aplica) =====
+      if (authService.mustFilterByUser &&
+          authService.getCurrentUserId() != null) {
+        final userId = authService.getCurrentUserId();
+        final originalCount = monitoreos.length;
+        monitoreos =
+            monitoreos.where((m) => m.pmmo_creadopor == userId).toList();
+        debugPrint(
+            '👤 Filtro por usuario: ${originalCount} → ${monitoreos.length}');
+      }
+
+      // ===== ACTUALIZAR UI =====
+      if (mounted) {
+        setState(() {
+          _monitoreoData = monitoreos;
+          _currentPage = 1;
+          _applyPagination();
+          _isLoading = false;
+        });
+
+        debugPrint(
+            '✅ BÚSQUEDA COMPLETADA: ${monitoreos.length} monitoreos mostrados');
+      }
+    } catch (e) {
+      debugPrint('❌ ERROR EN BÚSQUEDA: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Error en búsqueda: $e';
+        });
+        _showMessage('Error en búsqueda: $e');
+      }
+    }
   }
-  
-  // Mostrar selector de rango
-  final DateTimeRange? picked = await showDateRangePicker(
-    context: context,
-    firstDate: firstDate,
-    lastDate: lastDate,
-    initialDateRange: initialRange,
-    initialEntryMode: DatePickerEntryMode.calendarOnly,
-    helpText: 'Seleccionar rango de fechas',
-    cancelText: 'Cancelar',
-    confirmText: 'Aplicar',
-    saveText: 'Guardar',
-    fieldStartLabelText: 'Fecha Inicio',
-    fieldEndLabelText: 'Fecha Fin',
-    errorFormatText: 'Formato incorrecto',
-    errorInvalidText: 'Fecha fuera del rango',
-    errorInvalidRangeText: 'Rango inválido',
-    builder: (context, child) {
-      return Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: Colors.indigo, // Color del header
-            onPrimary: Colors.white, // Color del texto del header
-            onSurface: Colors.black, // Color del texto del calendario
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.indigo, // Color de los botones
+
+  /// Muestra un selector de rango de fechas y actualiza los filtros
+  Future<void> _selectDateRange(BuildContext context) async {
+    // Rango inicial: Si ya hay fechas seleccionadas, usarlas; sino usar últimos 7 días
+    final DateTime now = DateTime.now();
+    final DateTime firstDate =
+        DateTime(2020, 1, 1); // Fecha más antigua permitida
+    final DateTime lastDate =
+        now.add(Duration(days: 365)); // Hasta 1 año en el futuro
+
+    // Rango inicial
+    DateTimeRange? initialRange;
+    if (_fechaInicio != null && _fechaFin != null) {
+      initialRange = DateTimeRange(start: _fechaInicio!, end: _fechaFin!);
+    } else {
+      // Por defecto: últimos 7 días
+      initialRange = DateTimeRange(
+        start: now.subtract(Duration(days: 7)),
+        end: now,
+      );
+    }
+
+    // Mostrar selector de rango
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: initialRange,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: 'Seleccionar rango de fechas',
+      cancelText: 'Cancelar',
+      confirmText: 'Aplicar',
+      saveText: 'Guardar',
+      fieldStartLabelText: 'Fecha Inicio',
+      fieldEndLabelText: 'Fecha Fin',
+      errorFormatText: 'Formato incorrecto',
+      errorInvalidText: 'Fecha fuera del rango',
+      errorInvalidRangeText: 'Rango inválido',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.indigo, // Color del header
+              onPrimary: Colors.white, // Color del texto del header
+              onSurface: Colors.black, // Color del texto del calendario
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.indigo, // Color de los botones
+              ),
             ),
           ),
-        ),
-        child: child!,
-      );
-    },
-  );
-  
-  // Si el usuario seleccionó un rango
-  if (picked != null && mounted) {
-    // Normalizar fechas (solo año, mes, día - sin horas)
-    final fechaInicioNormalizada = DateTime(
-      picked.start.year,
-      picked.start.month,
-      picked.start.day,
+          child: child!,
+        );
+      },
     );
-    
-    final fechaFinNormalizada = DateTime(
-      picked.end.year,
-      picked.end.month,
-      picked.end.day,
-    );
-    
-    setState(() {
-      _fechaInicio = fechaInicioNormalizada;
-      _fechaFin = fechaFinNormalizada;
-      
-      // Actualizar los controladores de texto para mostrar las fechas
-      _fechaInicioController.text = DateFormat('dd/MM/yyyy').format(fechaInicioNormalizada);
-      _fechaFinController.text = DateFormat('dd/MM/yyyy').format(fechaFinNormalizada);
-    });
-    
-    // Log para debug
-    debugPrint('📅 RANGO DE FECHAS SELECCIONADO:');
-    debugPrint('  - Inicio: ${_fechaInicioController.text} (${fechaInicioNormalizada.toIso8601String()})');
-    debugPrint('  - Fin: ${_fechaFinController.text} (${fechaFinNormalizada.toIso8601String()})');
-    
-    // Mostrar mensaje al usuario
-    _showMessage('Fechas seleccionadas: ${_fechaInicioController.text} - ${_fechaFinController.text}');
-  }
-}
 
-/// Aplica filtros a una lista de monitoreos localmente (para modo offline)
-List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
-  List<Monitoreo> filtered = monitoreos;
-  int initialCount = monitoreos.length;
-  
-  // Filtro de lote (búsqueda parcial, case-insensitive)
-  if (_searchController.text.isNotEmpty) {
-    final searchTerm = _searchController.text.toLowerCase();
-    filtered = filtered.where((m) => 
-      m.pmlt_codigo?.toLowerCase().contains(searchTerm) ?? false
-    ).toList();
-    debugPrint('  🔍 Lote "$searchTerm": ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de plaga (exacto)
-  if (_selectedPlaga != null && _selectedPlaga != 'Todas' && _selectedPlaga!.isNotEmpty) {
-    filtered = filtered.where((m) => m.pmni_nombrecomun == _selectedPlaga).toList();
-    debugPrint('  🔍 Plaga "$_selectedPlaga": ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de casa (exacto)
-  if (_selectedCasaFiltro != null && _selectedCasaFiltro != 'Todas' && _selectedCasaFiltro!.isNotEmpty) {
-    filtered = filtered.where((m) => m.pmmo_casa == _selectedCasaFiltro).toList();
-    debugPrint('  🔍 Casa "$_selectedCasaFiltro": ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de cantero (exacto)
-  if (_selectedCanteroFiltro != null && _selectedCanteroFiltro != 'Todos' && _selectedCanteroFiltro!.isNotEmpty) {
-    filtered = filtered.where((m) => m.pmmo_cantero == _selectedCanteroFiltro).toList();
-    debugPrint('  🔍 Cantero "$_selectedCanteroFiltro": ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de variedad (exacto, soporta 2 campos)
-  if (_selectedVariedadFiltro != null && _selectedVariedadFiltro != 'Todas' && _selectedVariedadFiltro!.isNotEmpty) {
-    filtered = filtered.where((m) => 
-      m.pmmo_variedad == _selectedVariedadFiltro || 
-      m.pmva_descripcion == _selectedVariedadFiltro
-    ).toList();
-    debugPrint('  🔍 Variedad "$_selectedVariedadFiltro": ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de fechas (rango o día específico)
-  if (_fechaInicio != null || _fechaFin != null) {
-    filtered = filtered.where((m) {
-      if (m.pmmo_fecha == null) return false;
-      
-      // Normalizar fecha del monitoreo (solo año/mes/día)
-      final fechaMonitoreo = DateTime(
-        m.pmmo_fecha!.year,
-        m.pmmo_fecha!.month,
-        m.pmmo_fecha!.day,
+    // Si el usuario seleccionó un rango
+    if (picked != null && mounted) {
+      // Normalizar fechas (solo año, mes, día - sin horas)
+      final fechaInicioNormalizada = DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
       );
-      
-      bool cumpleFiltro = true;
-      
-      if (_fechaInicio != null && _fechaFin != null) {
-        final fechaInicioNorm = DateTime(_fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
-        final fechaFinNorm = DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day);
-        
-        // Caso especial: Mismo día (búsqueda exacta)
-        if (fechaInicioNorm.isAtSameMomentAs(fechaFinNorm)) {
-          cumpleFiltro = fechaMonitoreo.isAtSameMomentAs(fechaInicioNorm);
+
+      final fechaFinNormalizada = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+      );
+
+      setState(() {
+        _fechaInicio = fechaInicioNormalizada;
+        _fechaFin = fechaFinNormalizada;
+
+        // Actualizar los controladores de texto para mostrar las fechas
+        _fechaInicioController.text =
+            DateFormat('dd/MM/yyyy').format(fechaInicioNormalizada);
+        _fechaFinController.text =
+            DateFormat('dd/MM/yyyy').format(fechaFinNormalizada);
+      });
+
+      // Log para debug
+      debugPrint('📅 RANGO DE FECHAS SELECCIONADO:');
+      debugPrint(
+          '  - Inicio: ${_fechaInicioController.text} (${fechaInicioNormalizada.toIso8601String()})');
+      debugPrint(
+          '  - Fin: ${_fechaFinController.text} (${fechaFinNormalizada.toIso8601String()})');
+
+      // Mostrar mensaje al usuario
+      _showMessage(
+          'Fechas seleccionadas: ${_fechaInicioController.text} - ${_fechaFinController.text}');
+    }
+  }
+
+  /// Aplica filtros a una lista de monitoreos localmente (para modo offline)
+  List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
+    List<Monitoreo> filtered = monitoreos;
+    int initialCount = monitoreos.length;
+
+    // Filtro de lote (búsqueda parcial, case-insensitive)
+    if (_searchController.text.isNotEmpty) {
+      final searchTerm = _searchController.text.toLowerCase();
+      filtered = filtered
+          .where(
+              (m) => m.pmlt_codigo?.toLowerCase().contains(searchTerm) ?? false)
+          .toList();
+      debugPrint('  🔍 Lote "$searchTerm": ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de plaga (exacto)
+    if (_selectedPlaga != null &&
+        _selectedPlaga != 'Todas' &&
+        _selectedPlaga!.isNotEmpty) {
+      filtered =
+          filtered.where((m) => m.pmni_nombrecomun == _selectedPlaga).toList();
+      debugPrint(
+          '  🔍 Plaga "$_selectedPlaga": ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de casa (exacto)
+    if (_selectedCasaFiltro != null &&
+        _selectedCasaFiltro != 'Todas' &&
+        _selectedCasaFiltro!.isNotEmpty) {
+      filtered =
+          filtered.where((m) => m.pmmo_casa == _selectedCasaFiltro).toList();
+      debugPrint(
+          '  🔍 Casa "$_selectedCasaFiltro": ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de cantero (exacto)
+    if (_selectedCanteroFiltro != null &&
+        _selectedCanteroFiltro != 'Todos' &&
+        _selectedCanteroFiltro!.isNotEmpty) {
+      filtered = filtered
+          .where((m) => m.pmmo_cantero == _selectedCanteroFiltro)
+          .toList();
+      debugPrint(
+          '  🔍 Cantero "$_selectedCanteroFiltro": ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de variedad (exacto, soporta 2 campos)
+    if (_selectedVariedadFiltro != null &&
+        _selectedVariedadFiltro != 'Todas' &&
+        _selectedVariedadFiltro!.isNotEmpty) {
+      filtered = filtered
+          .where((m) =>
+              m.pmmo_variedad == _selectedVariedadFiltro ||
+              m.pmva_descripcion == _selectedVariedadFiltro)
+          .toList();
+      debugPrint(
+          '  🔍 Variedad "$_selectedVariedadFiltro": ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de fechas (rango o día específico)
+    if (_fechaInicio != null || _fechaFin != null) {
+      filtered = filtered.where((m) {
+        if (m.pmmo_fecha == null) return false;
+
+        // Normalizar fecha del monitoreo (solo año/mes/día)
+        final fechaMonitoreo = DateTime(
+          m.pmmo_fecha!.year,
+          m.pmmo_fecha!.month,
+          m.pmmo_fecha!.day,
+        );
+
+        bool cumpleFiltro = true;
+
+        if (_fechaInicio != null && _fechaFin != null) {
+          final fechaInicioNorm = DateTime(
+              _fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
+          final fechaFinNorm =
+              DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day);
+
+          // Caso especial: Mismo día (búsqueda exacta)
+          if (fechaInicioNorm.isAtSameMomentAs(fechaFinNorm)) {
+            cumpleFiltro = fechaMonitoreo.isAtSameMomentAs(fechaInicioNorm);
+          } else {
+            // Rango de fechas (inclusive)
+            cumpleFiltro = !fechaMonitoreo.isBefore(fechaInicioNorm) &&
+                !fechaMonitoreo.isAfter(fechaFinNorm);
+          }
         } else {
-          // Rango de fechas (inclusive)
-          cumpleFiltro = !fechaMonitoreo.isBefore(fechaInicioNorm) &&
-                        !fechaMonitoreo.isAfter(fechaFinNorm);
-        }
-      } else {
-        // Solo fecha inicio o solo fecha fin
-        if (_fechaInicio != null) {
-          final fechaInicioNorm = DateTime(_fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
-          cumpleFiltro = !fechaMonitoreo.isBefore(fechaInicioNorm);
-        }
-        
-        if (_fechaFin != null) {
-          final fechaFinNorm = DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day);
-          cumpleFiltro = cumpleFiltro && !fechaMonitoreo.isAfter(fechaFinNorm);
-        }
-      }
-      
-      return cumpleFiltro;
-    }).toList();
-    debugPrint('  🔍 Fechas (${_fechaInicio} a ${_fechaFin}): ${filtered.length}/${initialCount}');
-    initialCount = filtered.length;
-  }
-  
-  // Filtro de estatus
-  if (_selectedEstado != null) {
-    final estatusValue = _selectedEstado == 'Activo' ? 1 : 0;
-    filtered = filtered.where((m) => m.pmmo_estatus == estatusValue).toList();
-    debugPrint('  🔍 Estatus "$_selectedEstado": ${filtered.length}/${initialCount}');
-  }
-  
-  return filtered;
-}
+          // Solo fecha inicio o solo fecha fin
+          if (_fechaInicio != null) {
+            final fechaInicioNorm = DateTime(
+                _fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
+            cumpleFiltro = !fechaMonitoreo.isBefore(fechaInicioNorm);
+          }
 
+          if (_fechaFin != null) {
+            final fechaFinNorm =
+                DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day);
+            cumpleFiltro =
+                cumpleFiltro && !fechaMonitoreo.isAfter(fechaFinNorm);
+          }
+        }
+
+        return cumpleFiltro;
+      }).toList();
+      debugPrint(
+          '  🔍 Fechas (${_fechaInicio} a ${_fechaFin}): ${filtered.length}/${initialCount}');
+      initialCount = filtered.length;
+    }
+
+    // Filtro de estatus
+    if (_selectedEstado != null) {
+      final estatusValue = _selectedEstado == 'Activo' ? 1 : 0;
+      filtered = filtered.where((m) => m.pmmo_estatus == estatusValue).toList();
+      debugPrint(
+          '  🔍 Estatus "$_selectedEstado": ${filtered.length}/${initialCount}');
+    }
+
+    return filtered;
+  }
 
   // ===== GUARDADO Y ACTUALIZACIÓN =====
-  
+
   Future<void> _saveMonitoreo() async {
     if (!mounted) return;
 
     // Validaciones básicas
-    if (_isManualEntry && (_selectedVariedad == null || _selectedVariedad!.isEmpty)) {
+    if (_isManualEntry &&
+        (_selectedVariedad == null || _selectedVariedad!.isEmpty)) {
       setState(() => _errorMessage = 'Seleccione variedad');
       _showMessage('Seleccione variedad');
       return;
@@ -2134,23 +2312,31 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     });
 
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
       final authService = Provider.of<AuthService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final cacheService = Provider.of<CacheService>(context, listen: false);
       final intranetService = _cachedIntranetService;
 
       final userId = authService.getCurrentUserId();
       final cantidad = int.tryParse(_cantidadController.text) ?? 0;
       final cantidadBotada = int.tryParse(_cantidadBotadaController.text) ?? 0;
-      
+
       final muestra1 = int.tryParse(_muestra1Controller.text) ?? 0;
       final muestra2 = int.tryParse(_muestra2Controller.text) ?? 0;
       final muestra3 = int.tryParse(_muestra3Controller.text) ?? 0;
 
-      final nivelMuestra1 = _selectedNivelMuestra1 != null ? int.tryParse(_selectedNivelMuestra1!) : null;
-      final nivelMuestra2 = _selectedNivelMuestra2 != null ? int.tryParse(_selectedNivelMuestra2!) : null;
-      final nivelMuestra3 = _selectedNivelMuestra3 != null ? int.tryParse(_selectedNivelMuestra3!) : null;
+      final nivelMuestra1 = _selectedNivelMuestra1 != null
+          ? int.tryParse(_selectedNivelMuestra1!)
+          : null;
+      final nivelMuestra2 = _selectedNivelMuestra2 != null
+          ? int.tryParse(_selectedNivelMuestra2!)
+          : null;
+      final nivelMuestra3 = _selectedNivelMuestra3 != null
+          ? int.tryParse(_selectedNivelMuestra3!)
+          : null;
 
       // ===== ⭐ CALCULAR NIVELES AUTOMÁTICOS =====
       final nivelAutomatico1 = NivelCalculator.calcularNivelAutomatico(
@@ -2172,26 +2358,41 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       );
 
       debugPrint('🔢 [NIVEL_CALC] Niveles automáticos calculados:');
-      debugPrint('   Muestra 1: $muestra1 → Nivel: $nivelAutomatico1 (límites: $_limiteNivel1/$_limiteNivel2)');
+      debugPrint(
+          '   Muestra 1: $muestra1 → Nivel: $nivelAutomatico1 (límites: $_limiteNivel1/$_limiteNivel2)');
       debugPrint('   Muestra 2: $muestra2 → Nivel: $nivelAutomatico2');
       debugPrint('   Muestra 3: $muestra3 → Nivel: $nivelAutomatico3');
 
       final idVariedad = _obtenerIdVariedad(_selectedVariedad);
-      
+
       // IMPORTANTE: En modo wizard, siempre usar el rango completo en pmmo_canteros
       // Ejemplo: si wizard es 4-7, todos los registros tienen pmmo_canteros = "4-7"
       // incluso si solo guardaste el cantero 4 y 5 (guardado parcial)
       final canterosRange = _canterosRangeController.text;
-      final canterosParaGuardar = isWizardActive && canterosRange.isNotEmpty 
-          ? canterosRange  // Wizard activo → usar rango completo siempre
-          : _canteroController.text;  // Modo normal → usar cantero individual
-      
+      // ✅ NUEVO CÓDIGO:
+      final String canterosParaGuardar;
+
+      if (isWizardActive && canterosRange.isNotEmpty) {
+        canterosParaGuardar = canterosRange;
+      } else if (_loteCanterosOriginal != null &&
+          _loteCanterosOriginal!.isNotEmpty) {
+        canterosParaGuardar = _loteCanterosOriginal!; // ✅ FIX
+      } else {
+        canterosParaGuardar = _canteroController.text;
+      }
+
+      // Agregar también este log:
+      debugPrint('   - loteCanterosOriginal: "$_loteCanterosOriginal"');
+
       // LOGGING DETALLADO para debug
       debugPrint('💾 [SAVE] Preparando guardado:');
       debugPrint('   - isWizardActive: $isWizardActive');
-      debugPrint('   - canterosRange (_canterosRangeController): "$canterosRange"');
-      debugPrint('   - cantero actual (_canteroController): "${_canteroController.text}"');
-      debugPrint('   - canterosParaGuardar (pmmo_canteros): "$canterosParaGuardar"');
+      debugPrint(
+          '   - canterosRange (_canterosRangeController): "$canterosRange"');
+      debugPrint(
+          '   - cantero actual (_canteroController): "${_canteroController.text}"');
+      debugPrint(
+          '   - canterosParaGuardar (pmmo_canteros): "$canterosParaGuardar"');
 
       final monitoreo = Monitoreo(
         pmmo_secuencia: _currentMonitoreo?.pmmo_secuencia,
@@ -2211,27 +2412,27 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_estatus: 1,
         pmmo_creadopor: userId,
         pmmo_fechacreacion: DateTime.now(),
-        
+
         // Niveles MANUALES (seleccionados por usuario)
         pmmo_nivmuestram1: nivelMuestra1,
         pmmo_nivmuestram2: nivelMuestra2,
         pmmo_nivmuestram3: nivelMuestra3,
-        
+
         // ===== ⭐ Niveles AUTOMÁTICOS (calculados por sistema) =====
         pmmo_nivmuestraa1: nivelAutomatico1,
         pmmo_nivmuestraa2: nivelAutomatico2,
         pmmo_nivmuestraa3: nivelAutomatico3,
-        
+
         // Muestras
         pmmo_muestra1: muestra1,
         pmmo_muestra2: muestra2,
         pmmo_muestra3: muestra3,
-        
+
         // Límites (para referencia)
         lmsupniv1: _limiteNivel1,
         lmsupniv2: _limiteNivel2,
         lmsupniv3: _limiteNivel3,
-        
+
         pmmo_contenedor: _loteContenedorOriginal,
       );
 
@@ -2239,18 +2440,19 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       debugPrint('   pmmo_nivmuestraa1: $nivelAutomatico1');
       debugPrint('   pmmo_nivmuestraa2: $nivelAutomatico2');
       debugPrint('   pmmo_nivmuestraa3: $nivelAutomatico3');
-      debugPrint('   lmsupniv1: $_limiteNivel1, lmsupniv2: $_limiteNivel2, lmsupniv3: $_limiteNivel3');
-
+      debugPrint(
+          '   lmsupniv1: $_limiteNivel1, lmsupniv2: $_limiteNivel2, lmsupniv3: $_limiteNivel3');
 
       if (intranetService == null || !intranetService.isConnected.value) {
         // Modo OFFLINE
         debugPrint('📴 Guardando en modo OFFLINE...');
-        
+
         if (_currentMonitoreo != null) {
           // Actualización
-          await offlineDbService.saveMonitoreoFromMap(monitoreo.toJson(), isLocal: true);
+          await offlineDbService.saveMonitoreoFromMap(monitoreo.toJson(),
+              isLocal: true);
           await registerPendingChange('update', monitoreo);
-          
+
           if (mounted) {
             setState(() {
               _isSubmitting = false;
@@ -2258,7 +2460,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             });
             _showMessage('Actualizado offline - Se sincronizará al conectar');
             await _loadData();
-            
+
             // Cerrar formulario después de actualizar
             _clearForm();
             if (mounted) {
@@ -2272,42 +2474,47 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             pmmo_secuencia: tempId,
             isOfflineCreated: true,
           );
-          
-          await offlineDbService.saveMonitoreoFromMap(monitoreoConId.toJson(), isLocal: true);
+
+          await offlineDbService.saveMonitoreoFromMap(monitoreoConId.toJson(),
+              isLocal: true);
           await registerPendingChange('create', monitoreoConId);
-          
+
           setState(() => _lastSaveSuccess = true);
-          
+
           if (mounted) {
             setState(() => _isSubmitting = false);
             _showMessage('Guardado offline - Se sincronizará al conectar');
-            
-            // ✅ OPTIMIZACIÓN: Agregar solo el nuevo monitoreo en lugar de recargar todo
-            _addMonitoreoToList(monitoreoConId);
-            
+
             // Cerrar formulario si NO hay wizard activo
             if (!isWizardActive) {
               _clearForm();
               if (mounted) {
+                // ✅ FIX: Recargar datos para refrescar vista
+                await loadData();
                 _tabController.animateTo(0);
               }
             } else {
-              // Si wizard está activo, solo limpiar datos del monitoreo
+              // ✅ OPTIMIZACIÓN: Solo en modo wizard usar addToList (no cambia de tab)
+              _addMonitoreoToList(monitoreoConId);
               _clearMonitoreoData();
-              debugPrint('🧙 Wizard activo - Formulario permanece abierto para siguiente cantero');
+              debugPrint(
+                  '🧙 Wizard activo - Formulario permanece abierto para siguiente cantero');
             }
           }
         }
-        
+
         return;
       }
 
       // Modo ONLINE
       if (_currentMonitoreo != null) {
         // Actualización
-        final monitoreoActualizado = await monitoreoService.actualizarMonitoreo(monitoreo);
-        await offlineDbService.saveMonitoreoFromMap(monitoreoActualizado.toJson(), isLocal: false);
-        
+        final monitoreoActualizado =
+            await monitoreoService.actualizarMonitoreo(monitoreo);
+        await offlineDbService.saveMonitoreoFromMap(
+            monitoreoActualizado.toJson(),
+            isLocal: false);
+
         if (mounted) {
           setState(() {
             _isSubmitting = false;
@@ -2315,7 +2522,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           });
           _showMessage('Monitoreo actualizado correctamente');
           await _loadData();
-          
+
           // Cerrar formulario después de actualizar
           _clearForm();
           if (mounted) {
@@ -2326,41 +2533,51 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         // Creación
         debugPrint('🔵 [SAVE PARCIAL] Paso 1: Llamando a crearMonitoreo...');
         final nuevoMonitoreo = await monitoreoService.crearMonitoreo(monitoreo);
-        debugPrint('🔵 [SAVE PARCIAL] Paso 2: Monitoreo creado con ID: ${nuevoMonitoreo.pmmo_secuencia}');
-        
+        debugPrint(
+            '🔵 [SAVE PARCIAL] Paso 2: Monitoreo creado con ID: ${nuevoMonitoreo.pmmo_secuencia}');
+
         debugPrint('🔵 [SAVE PARCIAL] Paso 3: Guardando en SQLite...');
-        await offlineDbService.saveMonitoreoFromMap(nuevoMonitoreo.toJson(), isLocal: false);
+        await offlineDbService.saveMonitoreoFromMap(nuevoMonitoreo.toJson(),
+            isLocal: false);
         debugPrint('🔵 [SAVE PARCIAL] Paso 4: Guardado en SQLite exitoso');
-        
+
         debugPrint('🔵 [SAVE PARCIAL] Paso 5: Verificando mounted: $mounted');
         if (mounted) {
-          debugPrint('🔵 [SAVE PARCIAL] Paso 6: Seteando _lastSaveSuccess = true');
+          debugPrint(
+              '🔵 [SAVE PARCIAL] Paso 6: Seteando _lastSaveSuccess = true');
           setState(() {
             _isSubmitting = false;
             _lastSaveSuccess = true;
           });
-          debugPrint('🔵 [SAVE PARCIAL] Paso 7: _lastSaveSuccess seteado correctamente');
-          
+          debugPrint(
+              '🔵 [SAVE PARCIAL] Paso 7: _lastSaveSuccess seteado correctamente');
+
           _showMessage('✅ Monitoreo creado correctamente');
           debugPrint('🔵 [SAVE PARCIAL] Paso 8: Mensaje mostrado');
-          
-          debugPrint('🔵 [SAVE PARCIAL] Paso 9: Agregando monitoreo a lista (optimizado)...');
-          // ✅ OPTIMIZACIÓN: Agregar solo el nuevo monitoreo en lugar de recargar todo
-          _addMonitoreoToList(nuevoMonitoreo);
-          debugPrint('🔵 [SAVE PARCIAL] Paso 10: Monitoreo agregado a lista');
-          
-          // CAMBIO UX: Solo cerrar formulario si NO hay wizard activo
+
+// CAMBIO UX: Solo cerrar formulario si NO hay wizard activo
           if (!isWizardActive) {
-            debugPrint('🔵 [SAVE PARCIAL] Paso 11: No hay wizard, limpiando formulario');
+            debugPrint(
+                '🔵 [SAVE PARCIAL] Paso 9: No hay wizard, limpiando formulario');
             _clearForm();
             if (mounted) {
+              // ✅ FIX: Recargar datos para refrescar vista
+              debugPrint(
+                  '🔵 [SAVE PARCIAL] Paso 10: Recargando datos desde BD...');
+              await loadData();
+              debugPrint(
+                  '🔵 [SAVE PARCIAL] Paso 11: Datos recargados, cambiando a tab Consulta');
               _tabController.animateTo(0);
             }
           } else {
-            // Si wizard está activo, solo limpiar datos del monitoreo (no todo el formulario)
-            debugPrint('🔵 [SAVE PARCIAL] Paso 11: Wizard activo, limpiando solo datos monitoreo');
+            debugPrint(
+                '🔵 [SAVE PARCIAL] Paso 9: Wizard activo, solo agregando a lista local');
+            // ✅ OPTIMIZACIÓN: Solo en modo wizard usar addToList (no cambia de tab)
+            _addMonitoreoToList(nuevoMonitoreo);
+            debugPrint('🔵 [SAVE PARCIAL] Paso 10: Monitoreo agregado a lista');
             _clearMonitoreoData();
-            debugPrint('🧙 Wizard activo - Formulario permanece abierto para siguiente cantero');
+            debugPrint(
+                '🧙 Wizard activo - Formulario permanece abierto para siguiente cantero');
           }
           debugPrint('✅ [SAVE PARCIAL] COMPLETADO EXITOSAMENTE');
         } else {
@@ -2376,8 +2593,9 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           _errorMessage = e.toString();
           _lastSaveSuccess = false;
         });
-        debugPrint('❌ [SAVE PARCIAL] _lastSaveSuccess seteado a false por error');
-        
+        debugPrint(
+            '❌ [SAVE PARCIAL] _lastSaveSuccess seteado a false por error');
+
         if (e.toString().contains('duplicado')) {
           final match = RegExp(r'ID: (\d+)').firstMatch(e.toString());
           if (match != null) {
@@ -2387,7 +2605,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             _showMessage('Error: ${e.toString()}');
           }
         } else {
-          FriendlyErrorDialog.show(context, title: 'Error', message: e.toString());
+          FriendlyErrorDialog.show(context,
+              title: 'Error', message: e.toString());
         }
       }
     }
@@ -2397,12 +2616,15 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     if (!mounted) return;
 
     // Validaciones
-    if (_isManualEntry && (_selectedVariedad == null || _selectedVariedad!.isEmpty)) {
+    if (_isManualEntry &&
+        (_selectedVariedad == null || _selectedVariedad!.isEmpty)) {
       _showMessage('Seleccione variedad para guardado parcial');
       return;
     }
 
-    if (_codigoLoteController.text.isEmpty || _selectedCasa == null || _canteroController.text.isEmpty) {
+    if (_codigoLoteController.text.isEmpty ||
+        _selectedCasa == null ||
+        _canteroController.text.isEmpty) {
       _showMessage('Complete lote, casa y cantero');
       return;
     }
@@ -2416,8 +2638,9 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     final clave = _isManualEntry
         ? '${_canteroController.text}|$_selectedVariedad|$_selectedPlaga'
         : _selectedPlaga!;
-    
-    if (_plagasRegistradasParcial.contains(clave) && !_isEditingExistingPartial) {
+
+    if (_plagasRegistradasParcial.contains(clave) &&
+        !_isEditingExistingPartial) {
       _showMessage('Plaga ya registrada en este guardado parcial');
       return;
     }
@@ -2428,22 +2651,30 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     });
 
     try {
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
       final authService = Provider.of<AuthService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
 
       final userId = authService.getCurrentUserId();
       final cantidad = int.tryParse(_cantidadController.text) ?? 0;
       final cantidadBotada = int.tryParse(_cantidadBotadaController.text) ?? 0;
-      
+
       final muestra1 = int.tryParse(_muestra1Controller.text) ?? 0;
       final muestra2 = int.tryParse(_muestra2Controller.text) ?? 0;
       final muestra3 = int.tryParse(_muestra3Controller.text) ?? 0;
 
-      final nivelMuestra1 = _selectedNivelMuestra1 != null ? int.tryParse(_selectedNivelMuestra1!) : null;
-      final nivelMuestra2 = _selectedNivelMuestra2 != null ? int.tryParse(_selectedNivelMuestra2!) : null;
-      final nivelMuestra3 = _selectedNivelMuestra3 != null ? int.tryParse(_selectedNivelMuestra3!) : null;
+      final nivelMuestra1 = _selectedNivelMuestra1 != null
+          ? int.tryParse(_selectedNivelMuestra1!)
+          : null;
+      final nivelMuestra2 = _selectedNivelMuestra2 != null
+          ? int.tryParse(_selectedNivelMuestra2!)
+          : null;
+      final nivelMuestra3 = _selectedNivelMuestra3 != null
+          ? int.tryParse(_selectedNivelMuestra3!)
+          : null;
 
       // ===== ⭐ CALCULAR NIVELES AUTOMÁTICOS =====
       final nivelAutomatico1 = NivelCalculator.calcularNivelAutomatico(
@@ -2464,23 +2695,27 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         _limiteNivel2,
       );
 
-      debugPrint('🔢 [NIVEL_CALC_PARCIAL] Niveles automáticos: $nivelAutomatico1, $nivelAutomatico2, $nivelAutomatico3');
+      debugPrint(
+          '🔢 [NIVEL_CALC_PARCIAL] Niveles automáticos: $nivelAutomatico1, $nivelAutomatico2, $nivelAutomatico3');
 
       final idVariedad = _obtenerIdVariedad(_selectedVariedad);
-      
+
       // IMPORTANTE: En modo wizard, siempre usar el rango completo en pmmo_canteros
       // Mismo código que en _saveMonitoreo() para consistencia
       final canterosRange = _canterosRangeController.text;
-      final canterosParaGuardar = isWizardActive && canterosRange.isNotEmpty 
-          ? canterosRange  // Wizard activo → usar rango completo siempre
-          : _canteroController.text;  // Modo normal → usar cantero individual
-      
+      final canterosParaGuardar = isWizardActive && canterosRange.isNotEmpty
+          ? canterosRange // Wizard activo → usar rango completo siempre
+          : _canteroController.text; // Modo normal → usar cantero individual
+
       // LOGGING DETALLADO para debug de guardado parcial
       debugPrint('💾 [SAVE PARCIAL] Preparando guardado:');
       debugPrint('   - isWizardActive: $isWizardActive');
-      debugPrint('   - canterosRange (_canterosRangeController): "$canterosRange"');
-      debugPrint('   - cantero actual (_canteroController): "${_canteroController.text}"');
-      debugPrint('   - canterosParaGuardar (pmmo_canteros): "$canterosParaGuardar"');
+      debugPrint(
+          '   - canterosRange (_canterosRangeController): "$canterosRange"');
+      debugPrint(
+          '   - cantero actual (_canteroController): "${_canteroController.text}"');
+      debugPrint(
+          '   - canterosParaGuardar (pmmo_canteros): "$canterosParaGuardar"');
 
       final monitoreo = Monitoreo(
         pmmo_secuencia: _currentMonitoreo?.pmmo_secuencia,
@@ -2500,27 +2735,27 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         pmmo_estatus: 1,
         pmmo_creadopor: userId,
         pmmo_fechacreacion: DateTime.now(),
-        
+
         // Niveles MANUALES
         pmmo_nivmuestram1: nivelMuestra1,
         pmmo_nivmuestram2: nivelMuestra2,
         pmmo_nivmuestram3: nivelMuestra3,
-        
+
         // ===== ⭐ Niveles AUTOMÁTICOS =====
         pmmo_nivmuestraa1: nivelAutomatico1,
         pmmo_nivmuestraa2: nivelAutomatico2,
         pmmo_nivmuestraa3: nivelAutomatico3,
-        
+
         // Muestras
         pmmo_muestra1: muestra1,
         pmmo_muestra2: muestra2,
         pmmo_muestra3: muestra3,
-        
+
         // Límites
         lmsupniv1: _limiteNivel1,
         lmsupniv2: _limiteNivel2,
         lmsupniv3: _limiteNivel3,
-        
+
         pmmo_contenedor: _loteContenedorOriginal,
       );
 
@@ -2529,13 +2764,16 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       if (intranetService == null || !intranetService.isConnected.value) {
         // Modo OFFLINE
         if (_currentMonitoreo != null) {
-          await offlineDbService.saveMonitoreoFromMap(monitoreo.toJson(), isLocal: true);
+          await offlineDbService.saveMonitoreoFromMap(monitoreo.toJson(),
+              isLocal: true);
           await registerPendingChange('update', monitoreo);
           resultado = monitoreo;
         } else {
           final tempId = DateTime.now().millisecondsSinceEpoch * -1;
-          resultado = monitoreo.copyWith(pmmo_secuencia: tempId, isOfflineCreated: true);
-          await offlineDbService.saveMonitoreoFromMap(resultado.toJson(), isLocal: true);
+          resultado = monitoreo.copyWith(
+              pmmo_secuencia: tempId, isOfflineCreated: true);
+          await offlineDbService.saveMonitoreoFromMap(resultado.toJson(),
+              isLocal: true);
           await registerPendingChange('create', resultado);
         }
       } else {
@@ -2545,8 +2783,9 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         } else {
           resultado = await monitoreoService.crearMonitoreo(monitoreo);
         }
-        await offlineDbService.saveMonitoreoFromMap(resultado.toJson(), isLocal: false);
-        
+        await offlineDbService.saveMonitoreoFromMap(resultado.toJson(),
+            isLocal: false);
+
         // ✅ CRÍTICO: Setear flag de éxito para que wizardNext() pueda avanzar
         setState(() {
           _lastSaveSuccess = true;
@@ -2578,10 +2817,10 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         }
 
         _clearMonitoreoData();
-        
+
         // ✅ OPTIMIZACIÓN: Agregar solo el nuevo monitoreo en lugar de recargar todo
         _addMonitoreoToList(resultado);
-        
+
         prepareNavigationData();
         _showMessage('Guardado parcial - Puede agregar más plagas');
       }
@@ -2592,7 +2831,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           _isSubmitting = false;
           _errorMessage = e.toString();
         });
-        FriendlyErrorDialog.show(context, title: 'Error', message: e.toString());
+        FriendlyErrorDialog.show(context,
+            title: 'Error', message: e.toString());
       }
     }
   }
@@ -2621,14 +2861,17 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
 
     try {
       setState(() => _isLoading = true);
-      
-      final monitoreoService = Provider.of<MonitoreoService>(context, listen: false);
-      final offlineDbService = Provider.of<OfflineDatabaseService>(context, listen: false);
+
+      final monitoreoService =
+          Provider.of<MonitoreoService>(context, listen: false);
+      final offlineDbService =
+          Provider.of<OfflineDatabaseService>(context, listen: false);
       final intranetService = _cachedIntranetService;
 
       if (intranetService == null || !intranetService.isConnected.value) {
         // Modo OFFLINE
-        final monitoreo = _monitoreoData.firstWhere((m) => m.pmmo_secuencia == secuencia);
+        final monitoreo =
+            _monitoreoData.firstWhere((m) => m.pmmo_secuencia == secuencia);
         await offlineDbService.deleteMonitoreo(secuencia);
         await registerPendingChange('delete', monitoreo);
       } else {
@@ -2644,14 +2887,15 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        FriendlyErrorDialog.show(context, title: 'Error', message: e.toString());
+        FriendlyErrorDialog.show(context,
+            title: 'Error', message: e.toString());
       }
     }
   }
 
   void _clearForm() {
     if (!mounted) return;
-    
+
     _codigoLoteController.clear();
     _casaController.clear();
     _canteroController.clear();
@@ -2684,7 +2928,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       _cantidadController.text = '0';
       _plagasRegistradasParcial.clear();
       _variedadesUsadasParcial.clear();
-      
+
       clearNavigationData(); // Del NavigationMixin
     });
 
@@ -2699,22 +2943,27 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         _muestra1Controller.text.isNotEmpty ||
         _muestra2Controller.text.isNotEmpty ||
         _muestra3Controller.text.isNotEmpty ||
-        (_cantidadBotadaController.text.isNotEmpty && _cantidadBotadaController.text != '0');
-    
+        (_cantidadBotadaController.text.isNotEmpty &&
+            _cantidadBotadaController.text != '0');
+
     if (tieneDatos) {
       // Mostrar diálogo de confirmación
       final confirmar = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          icon: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 56),
-          title: Text('Datos sin guardar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon:
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 56),
+          title: Text('Datos sin guardar',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tiene datos sin guardar. ¿Desea descartarlos?', style: TextStyle(fontSize: 14)),
+              Text('Tiene datos sin guardar. ¿Desea descartarlos?',
+                  style: TextStyle(fontSize: 14)),
               SizedBox(height: 16),
               Container(
                 padding: EdgeInsets.all(12),
@@ -2730,7 +2979,10 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                     Expanded(
                       child: Text(
                         'Los datos se perderán permanentemente',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange.shade900, fontSize: 13),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade900,
+                            fontSize: 13),
                       ),
                     ),
                   ],
@@ -2741,7 +2993,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Volver', style: TextStyle(color: Colors.grey.shade700)),
+              child:
+                  Text('Volver', style: TextStyle(color: Colors.grey.shade700)),
             ),
             ElevatedButton.icon(
               onPressed: () => Navigator.of(context).pop(true),
@@ -2751,7 +3004,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                 backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ],
@@ -2764,7 +3018,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         return;
       }
     }
-    
+
     // Limpiar formulario y cambiar a tab Consulta
     _clearForm();
     if (mounted) {
@@ -2775,11 +3029,11 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
 
   void _clearMonitoreoData() {
     if (!mounted) return;
-    
+
     _comentariosController.clear();
     _cantidadController.clear();
     _cantidadBotadaController.clear();
-    
+
     // CAMBIO UX: Limpiar muestras SIEMPRE (incluso en modo parcial)
     _muestra1Controller.clear();
     _muestra2Controller.clear();
@@ -2797,137 +3051,138 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
   // ========================================================================
   // IMPLEMENTACIÓN DE MÉTODOS ABSTRACTOS REQUERIDOS POR LOS MIXINS
   // ========================================================================
-  
+
   // --- Para CanteroWizardMixin ---
   @override
   TextEditingController get canteroController => _canteroController;
-  
+
   @override
   TextEditingController get canterosRangeController => _canterosRangeController;
-  
+
   @override
   bool get isManualEntry => _isManualEntry;
-  
+
   @override
   String? get loteCanterosOriginal => _loteCanterosOriginal;
-  
+
   @override
   set loteCanterosOriginal(String? value) => _loteCanterosOriginal = value;
-  
+
   @override
   List<Monitoreo> get monitoreoData => _monitoreoData;
-  
+
   @override
   String get currentLoteCode => _codigoLoteController.text;
-  
+
   @override
   String get currentCasa => _casaController.text;
-  
+
   @override
   TextEditingController get codigoLoteController => _codigoLoteController;
-  
+
   @override
   TextEditingController get casaController => _casaController;
-  
+
   @override
   TextEditingController get comentariosController => _comentariosController;
-  
+
   @override
   TextEditingController get cantidadController => _cantidadController;
-  
+
   @override
-  TextEditingController get cantidadBotadaController => _cantidadBotadaController;
-  
+  TextEditingController get cantidadBotadaController =>
+      _cantidadBotadaController;
+
   @override
   TextEditingController get muestra1Controller => _muestra1Controller;
-  
+
   @override
   TextEditingController get muestra2Controller => _muestra2Controller;
-  
+
   @override
   TextEditingController get muestra3Controller => _muestra3Controller;
-  
+
   @override
   String? get selectedPlaga => _selectedPlaga;
-  
+
   @override
   set selectedPlaga(String? value) => _selectedPlaga = value;
-  
+
   @override
   String? get selectedNivelMuestra1 => _selectedNivelMuestra1;
-  
+
   @override
   set selectedNivelMuestra1(String? value) => _selectedNivelMuestra1 = value;
-  
+
   @override
   String? get selectedNivelMuestra2 => _selectedNivelMuestra2;
-  
+
   @override
   set selectedNivelMuestra2(String? value) => _selectedNivelMuestra2 = value;
-  
+
   @override
   String? get selectedNivelMuestra3 => _selectedNivelMuestra3;
-  
+
   @override
   set selectedNivelMuestra3(String? value) => _selectedNivelMuestra3 = value;
-  
+
   @override
   Monitoreo? get currentMonitoreo => _currentMonitoreo;
-  
+
   @override
   set currentMonitoreo(Monitoreo? value) => _currentMonitoreo = value;
-  
+
   @override
   bool get isEditingExistingPartial => _isEditingExistingPartial;
-  
+
   @override
   set isEditingExistingPartial(bool value) => _isEditingExistingPartial = value;
-  
+
   @override
   Set<String> get plagasRegistradasParcial => _plagasRegistradasParcial;
-  
+
   @override
   Set<String> get variedadesUsadasParcial => _variedadesUsadasParcial;
-  
+
   @override
   bool get isInPartialSaveMode => _isInPartialSaveMode;
-  
+
   @override
   set isInPartialSaveMode(bool value) => _isInPartialSaveMode = value;
-  
+
   @override
   bool get lastSaveSuccess => _lastSaveSuccess;
-  
+
   @override
   Future<void> saveMonitoreo() => _saveMonitoreo();
-  
+
   @override
   void showMessage(String message) => _showMessage(message);
-  
+
   @override
   Future<void> loadData() => _loadData();
-  
+
   @override
   void clearMonitoreoData() => _clearMonitoreoData();
-  
+
   // --- Para MonitoreoNavigationMixin ---
   @override
   void editMonitoreo(Monitoreo monitoreo, {bool fromNavigation = false}) =>
       _editMonitoreo(monitoreo, fromNavigation: fromNavigation);
-  
+
   @override
   void prepareFormForNewPartial() => _prepareFormForNewPartial();
-  
+
   // --- Para MonitoreoDataLoaderMixin ---
   @override
   bool get isLoading => _isLoading;
-  
+
   @override
   set isLoading(bool value) => _isLoading = value;
-  
+
   @override
   IntranetService? get cachedIntranetService => _cachedIntranetService;
-  
+
   @override
   void _updateNivelesLimites(int nivel1, int nivel2, int nivel3) {
     if (mounted) {
@@ -2942,15 +3197,15 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
   // ========================================================================
   // MÉTODOS DEL HEADER PERSONALIZADO - UI OPTIMIZADA
   // ========================================================================
-  
+
   Widget _buildCustomHeader(BuildContext context) {
     final intranetService = Provider.of<IntranetService>(context);
     final isOnline = intranetService.isConnected.value;
-    
+
     // Calcular pendientes y estado de sincronización del Mixin
-    final pendingCount = pendingChangesCount;  // Getter del MonitoreoSyncMixin
-    final isSyncing = this.isSyncing;          // Getter del MonitoreoSyncMixin
-    
+    final pendingCount = pendingChangesCount; // Getter del MonitoreoSyncMixin
+    final isSyncing = this.isSyncing; // Getter del MonitoreoSyncMixin
+
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2968,27 +3223,28 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
         children: [
           // Espacio para balance visual
           const SizedBox(width: 8),
-          
+
           const Spacer(),
-          
+
           // Notificaciones (iconos compactos)
           _buildNotificationIcons(isOnline, pendingCount, isSyncing),
-          
+
           const SizedBox(width: 16),
-          
+
           // Tabs integrados
           _buildCompactTabs(),
-          
+
           const SizedBox(width: 16),
-          
+
           // Info de usuario
           _buildUserInfo(),
         ],
       ),
     );
   }
-  
-  Widget _buildNotificationIcons(bool isOnline, int pendingCount, bool isSyncing) {
+
+  Widget _buildNotificationIcons(
+      bool isOnline, int pendingCount, bool isSyncing) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3001,7 +3257,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             size: 20,
           ),
         ),
-        
+
         // Icono de pendientes/sync
         if (pendingCount > 0) ...[
           const SizedBox(width: 12),
@@ -3021,7 +3277,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange.shade700),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.orange.shade700),
                             ),
                           )
                         : Icon(
@@ -3035,7 +3292,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                       right: -2,
                       top: -2,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.red,
                           borderRadius: BorderRadius.circular(10),
@@ -3060,7 +3318,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       ],
     );
   }
-  
+
   Widget _buildCompactTabs() {
     return Container(
       decoration: BoxDecoration(
@@ -3086,7 +3344,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       ),
     );
   }
-  
+
   Widget _buildTabButton({
     required IconData icon,
     required String label,
@@ -3097,7 +3355,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(10),  // Padding cuadrado para iconos
+        padding: const EdgeInsets.all(10), // Padding cuadrado para iconos
         decoration: BoxDecoration(
           color: isActive ? Colors.indigo[600] : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -3107,7 +3365,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           children: [
             Icon(
               icon,
-              size: 20,  // Icono un poco más grande sin texto
+              size: 20, // Icono un poco más grande sin texto
               color: isActive ? Colors.white : Colors.grey[600],
             ),
           ],
@@ -3115,13 +3373,13 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
       ),
     );
   }
-  
+
   Widget _buildUserInfo() {
     final authService = Provider.of<AuthService>(context, listen: false);
-    final userName = authService.currentUser?.name ?? 
-                     authService.currentUser?.username ?? 
-                     'Usuario';
-    
+    final userName = authService.currentUser?.name ??
+        authService.currentUser?.username ??
+        'Usuario';
+
     return PopupMenuButton<String>(
       offset: const Offset(0, 50),
       child: Container(
@@ -3176,7 +3434,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           ),
         ),
         const PopupMenuDivider(),
-        
+
         // === MANTENIMIENTO ===
         // Hard Refresh
         const PopupMenuItem(
@@ -3189,7 +3447,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             ],
           ),
         ),
-        
+
         // Limpiar registros locales
         const PopupMenuItem(
           value: 'clear_local',
@@ -3201,7 +3459,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             ],
           ),
         ),
-        
+
         // Borrar base de datos
         const PopupMenuItem(
           value: 'delete_db',
@@ -3214,7 +3472,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
           ),
         ),
         const PopupMenuDivider(),
-        
+
         // Cerrar sesión
         const PopupMenuItem(
           value: 'logout',
@@ -3237,24 +3495,24 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
             }
           },
         );
-        
+
         switch (value) {
           case 'info':
             _mostrarInfoApp();
             break;
-            
+
           case 'hard_refresh':
             await maintenance.hardRefresh();
             break;
-            
+
           case 'clear_local':
             await maintenance.limpiarRegistrosLocales();
             break;
-            
+
           case 'delete_db':
             await maintenance.borrarBaseDatos();
             break;
-            
+
           case 'logout':
             _logout();
             break;
@@ -3273,18 +3531,19 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
     final isSmallScreen = screenWidth < 1024;
     final intranetService = Provider.of<IntranetService>(context);
     final isOnline = intranetService.isConnected.value;
-    
+
     // Variables de sincronización del mixin (getters públicos)
-    final pendingChangesCount = this.pendingChangesCount;  // Del MonitoreoSyncMixin
-    final isSyncing = this.isSyncing;                      // Del MonitoreoSyncMixin
-    final lastSyncStatus = this.lastSyncStatus;            // Del MonitoreoSyncMixin
+    final pendingChangesCount =
+        this.pendingChangesCount; // Del MonitoreoSyncMixin
+    final isSyncing = this.isSyncing; // Del MonitoreoSyncMixin
+    final lastSyncStatus = this.lastSyncStatus; // Del MonitoreoSyncMixin
 
     return Scaffold(
       body: Column(
         children: [
           // Header personalizado compacto (reemplaza AppBar y SyncStatusBar)
           _buildCustomHeader(context),
-          
+
           // Wizard Bar (si está activo)
           if (isWizardActive)
             CanteroWizardBar(
@@ -3303,9 +3562,12 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
               onNext: wizardNext,
               onPrevious: wizardPrevious,
               onSkip: wizardSkip,
-              onFinish: _handleWizardFinish,  // Método inteligente: sin guardar vs con guardado
+              onFinish:
+                  _handleWizardFinish, // Método inteligente: sin guardar vs con guardado
               parcialInfo: getWizardParcialInfo(),
-              canteroTieneDatos: wizardCanterosMonitoreos[wizardCanteroActual]?.isNotEmpty ?? false,
+              canteroTieneDatos:
+                  wizardCanterosMonitoreos[wizardCanteroActual]?.isNotEmpty ??
+                      false,
               canParcialNext: canWizardParcialNext(),
               canParcialPrevious: canWizardParcialPrevious(),
               onParcialNext: wizardParcialNext,
@@ -3313,12 +3575,13 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
               isEditingParcial: _isEditingExistingPartial,
               onRangeChanged: onCanterosRangeChanged,
             ),
-          
+
           // Contenido principal con tabs
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(), // Deshabilitar swipe
+              physics:
+                  const NeverScrollableScrollPhysics(), // Deshabilitar swipe
               children: [
                 // Tab 1: Consulta
                 ConsultaTab(
@@ -3337,7 +3600,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                   onPageChanged: _handlePageChange,
                   onItemsPerPageChanged: _handleItemsPerPageChange,
                   onEdit: _editMonitoreo,
-                  onDelete: (monitoreo) => _deleteMonitoreo(monitoreo.pmmo_secuencia!),
+                  onDelete: (monitoreo) =>
+                      _deleteMonitoreo(monitoreo.pmmo_secuencia!),
                   onDetails: (monitoreo) {
                     MonitoreoDetailsDialog.showMonitoreoDetails(
                       context,
@@ -3361,11 +3625,16 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                   canteros: _obtenerListaCanteros(),
                   variedades: _variedades,
                   plagas: _plagas,
-                  onEstadoChanged: (value) => setState(() => _selectedEstado = value),
-                  onPlagaChanged: (value) => setState(() => _selectedPlaga = value),
-                  onCasaChanged: (value) => setState(() => _selectedCasaFiltro = value),
-                  onCanteroChanged: (value) => setState(() => _selectedCanteroFiltro = value),
-                  onVariedadChanged: (value) => setState(() => _selectedVariedadFiltro = value),
+                  onEstadoChanged: (value) =>
+                      setState(() => _selectedEstado = value),
+                  onPlagaChanged: (value) =>
+                      setState(() => _selectedPlaga = value),
+                  onCasaChanged: (value) =>
+                      setState(() => _selectedCasaFiltro = value),
+                  onCanteroChanged: (value) =>
+                      setState(() => _selectedCanteroFiltro = value),
+                  onVariedadChanged: (value) =>
+                      setState(() => _selectedVariedadFiltro = value),
                   onSelectDateRange: _selectDateRange,
                   onFechaReset: () {
                     setState(() {
@@ -3381,7 +3650,7 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                   isSmallScreen: isSmallScreen,
                   onNuevoMonitoreo: _nuevoMonitoreo,
                 ),
-                
+
                 // Tab 2: Registro
                 RegistroTab(
                   currentMonitoreo: _currentMonitoreo,
@@ -3424,11 +3693,12 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                   onToggleEntryMode: () {
                     setState(() {
                       _isManualEntry = !_isManualEntry;
-                      
+
                       if (_isManualEntry) {
                         // MODO MANUAL: Cargar lote por defecto
                         _codigoLoteController.text = _getDefaultLoteCode();
-                        debugPrint('📝 Modo Manual activado - Lote por defecto: ${_getDefaultLoteCode()}');
+                        debugPrint(
+                            '📝 Modo Manual activado - Lote por defecto: ${_getDefaultLoteCode()}');
                       } else {
                         // MODO CÓDIGO: Limpiar variedad manual
                         _selectedVariedad = null;
@@ -3441,7 +3711,8 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                       _selectedVariedad = value;
                       if (value != null && value != 'Variedad genérica') {
                         if (_responsablesPorVariedad.containsKey(value)) {
-                          _responsableController.text = _responsablesPorVariedad[value] ?? '';
+                          _responsableController.text =
+                              _responsablesPorVariedad[value] ?? '';
                         } else {
                           _responsableController.clear();
                         }
@@ -3468,25 +3739,28 @@ List<Monitoreo> _applyLocalFilters(List<Monitoreo> monitoreos) {
                   },
                   onMuestra1Changed: (value) {
                     setState(() {
-                      final total = (int.tryParse(_muestra1Controller.text) ?? 0) +
-                          (int.tryParse(_muestra2Controller.text) ?? 0) +
-                          (int.tryParse(_muestra3Controller.text) ?? 0);
+                      final total =
+                          (int.tryParse(_muestra1Controller.text) ?? 0) +
+                              (int.tryParse(_muestra2Controller.text) ?? 0) +
+                              (int.tryParse(_muestra3Controller.text) ?? 0);
                       _cantidadController.text = total.toString();
                     });
                   },
                   onMuestra2Changed: (value) {
                     setState(() {
-                      final total = (int.tryParse(_muestra1Controller.text) ?? 0) +
-                          (int.tryParse(_muestra2Controller.text) ?? 0) +
-                          (int.tryParse(_muestra3Controller.text) ?? 0);
+                      final total =
+                          (int.tryParse(_muestra1Controller.text) ?? 0) +
+                              (int.tryParse(_muestra2Controller.text) ?? 0) +
+                              (int.tryParse(_muestra3Controller.text) ?? 0);
                       _cantidadController.text = total.toString();
                     });
                   },
                   onMuestra3Changed: (value) {
                     setState(() {
-                      final total = (int.tryParse(_muestra1Controller.text) ?? 0) +
-                          (int.tryParse(_muestra2Controller.text) ?? 0) +
-                          (int.tryParse(_muestra3Controller.text) ?? 0);
+                      final total =
+                          (int.tryParse(_muestra1Controller.text) ?? 0) +
+                              (int.tryParse(_muestra2Controller.text) ?? 0) +
+                              (int.tryParse(_muestra3Controller.text) ?? 0);
                       _cantidadController.text = total.toString();
                     });
                   },
