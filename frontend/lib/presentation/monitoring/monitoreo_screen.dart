@@ -83,7 +83,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
   List<String> _variedades = ['Variedad genérica'];
   Map<String, String> _responsablesPorVariedad = {};
   String? _selectedCasa;
-  List<String> _casas = ['Casa genérica'];
+  List<String> _casas = [];
   List<String> _plagas = [];
 
   String? _selectedNivelMuestra1;
@@ -1516,11 +1516,25 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       }
     }
     List<String> resultado = canteros.toList();
-    resultado.sort((a, b) => a == 'Todos'
-        ? -1
-        : b == 'Todos'
-            ? 1
-            : a.compareTo(b));
+
+    // ✅ ORDENAMIENTO NUMÉRICO
+    resultado.sort((a, b) {
+      if (a == 'Todos') return -1;
+      if (b == 'Todos') return 1;
+
+      final aNum = int.tryParse(a);
+      final bNum = int.tryParse(b);
+
+      if (aNum != null && bNum != null) {
+        return aNum.compareTo(bNum); // 3 < 10 ✅
+      }
+
+      if (aNum != null) return -1;
+      if (bNum != null) return 1;
+
+      return a.compareTo(b);
+    });
+
     return resultado;
   }
 
@@ -1653,7 +1667,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
       if (mounted && casasList != null && casasList.isNotEmpty) {
         setState(() {
           casasData = {'data': casasList};
-          _casas = ['Casa genérica'];
+          _casas = [];
           for (var casa in casasList!) {
             String? codigo;
             if (casa is Map) {
@@ -1671,12 +1685,12 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         });
         debugPrint('✅ Casas procesadas: ${_casas.length}');
       } else {
-        if (mounted) setState(() => _casas = ['Casa genérica']);
+        if (mounted) setState(() => _casas = []);
         debugPrint('⚠️ Sin casas disponibles');
       }
     } catch (e) {
       debugPrint('❌ Error en _loadCasas: $e');
-      if (mounted) setState(() => _casas = ['Casa genérica']);
+      if (mounted) setState(() => _casas = []);
     }
   }
 
@@ -1792,6 +1806,38 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
         }
       }
     }
+  } // ✅ Cerrar el método _updateEditMode aquí
+
+  /// Limpia todos los filtros aplicados y recarga los datos
+  void _limpiarFiltros() {
+    // ✅ CORRECTO: Método independiente
+    if (!mounted) return;
+
+    setState(() {
+      // Limpiar filtros de texto
+      _searchController.clear();
+      _fechaInicioController.clear();
+      _fechaFinController.clear();
+
+      // Resetear dropdowns
+      _selectedEstado = null;
+      _selectedPlaga = null;
+      _selectedCasaFiltro = null;
+      _selectedCanteroFiltro = null;
+      _selectedVariedadFiltro = null;
+
+      // Resetear fechas
+      _fechaInicio = null;
+      _fechaFin = null;
+    });
+
+    // Recargar datos sin filtros
+    _loadData();
+
+    // Mostrar mensaje
+    _showMessage('Filtros limpiados');
+
+    debugPrint('🧹 Todos los filtros han sido limpiados');
   }
 
   // ===== MÉTODO OPTIMIZADO: AGREGAR MONITOREO SIN RECARGAR TODO =====
@@ -3611,6 +3657,7 @@ class _MonitoreoScreenState extends State<MonitoreoScreen>
                   },
                   onSearch: _searchMonitoreos,
                   onReload: _loadData,
+                  onLimpiarFiltros: _limpiarFiltros, // ✅ NUEVO
                   searchController: _searchController,
                   fechaInicioController: _fechaInicioController,
                   fechaFinController: _fechaFinController,

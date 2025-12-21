@@ -70,6 +70,8 @@ class ConsultaTab extends StatefulWidget {
   // Nuevo callback para crear un nuevo monitoreo
   final Function()? onNuevoMonitoreo;
 
+  final VoidCallback onLimpiarFiltros; // ✅ AGREGAR
+
   const ConsultaTab({
     Key? key,
     required this.monitoreos,
@@ -81,6 +83,7 @@ class ConsultaTab extends StatefulWidget {
     required this.onDetails,
     required this.onSearch,
     required this.onReload,
+    required this.onLimpiarFiltros, // ✅ AGREGAR
     required this.searchController,
     required this.fechaInicioController,
     required this.fechaFinController,
@@ -226,11 +229,10 @@ class _ConsultaTabState extends State<ConsultaTab> {
       'Todos',
       ...widget.canteros.where((cantero) => cantero != 'Todos')
     ];
-    
+
     // ✅ NUEVO: Preparar variedades para el selector mejorado (sin "Todas")
-    final List<String> filtrosVariedades = widget.variedades
-        .where((variedad) => variedad != 'Todas')
-        .toList();
+    final List<String> filtrosVariedades =
+        widget.variedades.where((variedad) => variedad != 'Todas').toList();
 
     // Obtener el servicio de autenticación y monitoreo
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -429,6 +431,20 @@ class _ConsultaTabState extends State<ConsultaTab> {
                     ),
 
                     const SizedBox(width: 16),
+
+                    // ✅ NUEVO: Botón Limpiar Filtros
+                    OutlinedButton.icon(
+                      onPressed: widget.isLoading
+                          ? null
+                          : widget.onLimpiarFiltros, // ✅ CORRECTO
+                      icon: Icon(Icons.clear_all, size: 18),
+                      label: Text('Limpiar Filtros'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: BorderSide(color: Colors.orange),
+                      ),
+                    ),
+                    SizedBox(width: 12),
 
                     // Botón Buscar
                     ElevatedButton.icon(
@@ -735,12 +751,33 @@ class _ConsultaTabState extends State<ConsultaTab> {
                                 // Botones de acción
                                 Row(
                                   children: [
+                                    // Botón Limpiar
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: widget.onLimpiarFiltros,
+                                        icon: const Icon(Icons.clear_all,
+                                            size: 14),
+                                        label: const Text('Limpiar',
+                                            style: TextStyle(fontSize: 12)),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.orange,
+                                          side:
+                                              BorderSide(color: Colors.orange),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // Botón Buscar
                                     Expanded(
                                       child: ElevatedButton.icon(
                                         onPressed: widget.onSearch,
                                         icon:
-                                            const Icon(Icons.search, size: 16),
-                                        label: const Text('Buscar'),
+                                            const Icon(Icons.search, size: 14),
+                                        label: const Text('Buscar',
+                                            style: TextStyle(fontSize: 12)),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               MonitoreoStyles.primaryColor,
@@ -750,14 +787,17 @@ class _ConsultaTabState extends State<ConsultaTab> {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
+
+                                    // Botón Exportar
                                     Expanded(
                                       child: ElevatedButton.icon(
                                         onPressed: () => widget.onExportExcel(
                                             'Monitoreos', false),
                                         icon: const Icon(Icons.file_download,
-                                            size: 16),
-                                        label: const Text('Exportar'),
+                                            size: 14),
+                                        label: const Text('Exportar',
+                                            style: TextStyle(fontSize: 12)),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Colors.green.shade600,
